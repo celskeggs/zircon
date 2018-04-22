@@ -42,19 +42,17 @@ type Chunkserver interface {
 	// Fails if a copy of this chunk isn't located on this chunkserver.
 	Read(ref ChunkReference, offset Offset, length Length, minimum Version) ([]byte, Version, error)
 
-	// Given a chunk reference, (re)write part or all of a chunk.
+	// Given a chunk reference, begin a write to that chunk.
 	// The sum of 'offset' and 'len(data)' must not be greater than MaxChunkSize.
-	// The 'version' field, if not AnyVersion, signals that a write should only be performed if the version is *exactly*
-	// the expected version.
-	// The new version is returned.
-	// Fails if a copy of this chunk isn't located on this chunkserver.
-	Write(ref ChunkReference, offset Offset, version Version, data []byte) (Version, error)
+	// If replicas is nonempty, this will also replicate the prepared write to those servers.
+	// Fails if a copy of this chunk isn't located on this chunkserver, or if another server fails to prepare.
+	StartWrite(ref ChunkReference, offset Offset, data []byte, replicas []ServerAddress) (error)
 }
 
 type ChunkserverAdmin interface {
 	// these are the same as in ChunkServer, except they don't need authentication.
 	Read(chunk ChunkNum, offset Offset, length Length, minimum Version) ([]byte, Version, error)
-	Write(chunk ChunkNum, offset Offset, version Version, data []byte) (Version, error)
+	StartWrite(chunk ChunkNum, offset Offset, data []byte) (Version, error)
 
 	// ** methods used by internal cluster systems **
 
@@ -65,14 +63,13 @@ type ChunkserverAdmin interface {
 	Add(chunk ChunkNum, initialData []byte, initialVersion Version) (error)
 
 	// Deletes a chunk stored on this chunkserver with a specific version.
-	// The specific version can be AnyVersion to delete regardless of version.
-	Delete(chunk ChunkNum, version Version) (error)
+	Delete(chunk ChunkNum) (error)
 
 	// Tells this chunkserver to directly replicate a particular chunk to another specified chunkserver.
 	// This will use 'subref' to call 'Add' on the other chunkserver at 'serverAddress'.
 	// Replication will only take place assuming that the 'version' specified is the version stored.
 	// This will return success once the operation has completed successfully.
-	Replicate(serverAddress string, subref ChunkReference, version Version) (error)
+	Replicate(serverAddress ServerAddress, subref ChunkReference, version Version) (error)
 
 	// Requests a list of all chunks currently held by this chunkserver.
 	ListAllChunks() ([]struct{ Chunk ChunkNum; Version Version }, error)

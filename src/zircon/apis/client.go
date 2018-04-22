@@ -21,6 +21,22 @@ type Client interface {
 	// Destroy a chunk, given a specific version number. Version checking works the same as for Write.
 	Delete(ref ChunkNum, version Version) error
 
-	// Close this connection.
+	// Close all connections used by this client.
 	Close() error
+
+	// Retrieve the access control ID for the current client.
+	GetMyAccessID() AccessControlID
+
+	// Create a new access control list, owned by a certain access control entity, and containing a certain set of
+	// entities with access.
+	CreateAccessControlList(owner AccessControlID, entities []AccessControlID) (AccessControlID, error)
+
+	// Get the contents of an existing access control list.
+	ReadAccessControlList(aci AccessControlID) (owner AccessControlID, entities []AccessControlID, err error)
+
+	// Update an existing access control list.
+	UpdateAccessControlList(aci AccessControlID, owner AccessControlID, entities []AccessControlID) error
+
+	// Delete an existing access control list.
+	DeleteAccessControlList(aci AccessControlID) error
 }
