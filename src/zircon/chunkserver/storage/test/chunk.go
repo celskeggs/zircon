@@ -122,6 +122,29 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, resetStorage func
 		assert.Equal([]byte("hello, world!"), stripTrailingZeroes(data))
 	})
 
+	test("update single chunk durability", func() {
+		assert.NoError(s.WriteVersion(71, 3, []byte("hello, world!\000\000\000")))
+
+		reopen()
+
+		assert.NoError(s.WriteVersion(71, 4, []byte("goodbye, world!\000\000\000")))
+
+		chunks, err := s.ListChunksWithData()
+		assert.NoError(err)
+		assert.Equal([]apis.ChunkNum{71}, chunks)
+
+		versions, err := s.ListVersions(71)
+		assert.NoError(err)
+		assert.Equal([]apis.Version{3, 4}, versions)
+
+		data, err := s.ReadVersion(71, 3)
+		assert.NoError(err)
+		assert.Equal([]byte("hello, world!"), stripTrailingZeroes(data))
+		data, err = s.ReadVersion(71, 4)
+		assert.NoError(err)
+		assert.Equal([]byte("goodbye, world!"), stripTrailingZeroes(data))
+	})
+
 	test("prevent rewriting versions", func() {
 		err := s.WriteVersion(71, 3, []byte("hello, world!\000\000\000"))
 		assert.NoError(err)
@@ -244,6 +267,24 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, resetStorage func
 		assert.NoError(s.WriteVersion(71, 2, []byte("71-2")))
 
 		assert.NoError(s.DeleteVersion(71, 2))
+
+		versions, err := s.ListVersions(71)
+		assert.NoError(err)
+		assert.Equal([]apis.Version{1, 3}, versions)
+
+		assert.Error(s.DeleteVersion(71, 2))
+	})
+
+	test("delete subset of versions with durability", func() {
+		assert.NoError(s.WriteVersion(71, 3, []byte("71-3")))
+		assert.NoError(s.WriteVersion(71, 1, []byte("71-1")))
+		assert.NoError(s.WriteVersion(71, 2, []byte("71-2")))
+
+		reopen()
+
+		assert.NoError(s.DeleteVersion(71, 2))
+
+		reopen()
 
 		versions, err := s.ListVersions(71)
 		assert.NoError(err)

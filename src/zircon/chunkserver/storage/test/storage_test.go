@@ -20,6 +20,7 @@ func TestMemoryStorage(t *testing.T) {
 		mem = newmem
 	}
 	TestChunkStorage(openStorage, resetStorage, t)
+	TestVersionStorage(openStorage, resetStorage, t)
 }
 
 func TestFilesystemStorage(t *testing.T) {
@@ -43,6 +44,7 @@ func TestFilesystemStorage(t *testing.T) {
 		require.NoError(t, os.Mkdir(working, 0755))
 	}
 	TestChunkStorage(openStorage, resetStorage, t)
+	TestVersionStorage(openStorage, resetStorage, t)
 }
 
 /*
@@ -55,5 +57,6 @@ func TestBlockStorage(t *testing.T) {
 
 	}
 	TestChunkStorage(openStorage, resetStorage, t)
+	TestVersionStorage(openStorage, resetStorage, t)
 }
 */
