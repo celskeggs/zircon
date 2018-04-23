@@ -27,14 +27,4 @@ type EtcdInterface interface {
 	GetMetametadata(blockid MetametadataID) (Metametadata, error)
 	// Update metametadata; only allowed if this server has a current claim on the block
 	UpdateMetametadata(blockid MetametadataID, data Metametadata) error
-
-	// Create a new access control list, owned by a certain access control entity, and containing a certain set of
-	// entities with access.
-	CreateAccessControlList(owner AccessControlID, entities []AccessControlID) (AccessControlID, error)
-	// Get the contents of an existing access control list.
-	ReadAccessControlList(aci AccessControlID) (owner AccessControlID, entities []AccessControlID, err error)
-	// Update an existing access control list.
-	UpdateAccessControlList(aci AccessControlID, owner AccessControlID, entities []AccessControlID) error
-	// Delete an existing access control list.
-	DeleteAccessControlList(aci AccessControlID) error
 }
