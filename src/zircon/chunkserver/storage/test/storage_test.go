@@ -14,13 +14,15 @@ func TestMemoryStorage(t *testing.T) {
 	openStorage := func() storage.ChunkStorage {
 		return mem
 	}
+	closeStorage := func(_ storage.ChunkStorage) {} // do nothing; memory would be wiped.
 	resetStorage := func() {
+		mem.Close()
 		newmem, err := storage.ConfigureMemoryStorage()
 		require.NoError(t, err)
 		mem = newmem
 	}
-	TestChunkStorage(openStorage, resetStorage, t)
-	TestVersionStorage(openStorage, resetStorage, t)
+	TestChunkStorage(openStorage, closeStorage, resetStorage, t)
+	TestVersionStorage(openStorage, closeStorage, resetStorage, t)
 }
 
 func TestFilesystemStorage(t *testing.T) {
@@ -39,12 +41,15 @@ func TestFilesystemStorage(t *testing.T) {
 		require.NoError(t, err)
 		return cs
 	}
+	closeStorage := func(storage storage.ChunkStorage) {
+		storage.Close()
+	}
 	resetStorage := func() {
 		require.NoError(t, os.RemoveAll(working))
 		require.NoError(t, os.Mkdir(working, 0755))
 	}
-	TestChunkStorage(openStorage, resetStorage, t)
-	TestVersionStorage(openStorage, resetStorage, t)
+	TestChunkStorage(openStorage, closeStorage, resetStorage, t)
+	TestVersionStorage(openStorage, closeStorage, resetStorage, t)
 }
 
 /*
@@ -52,6 +57,9 @@ func TestBlockStorage(t *testing.T) {
 	// TODO once we figure out how to make test block devices
 	openStorage := func() storage.ChunkStorage {
 
+	}
+	closeStorage := func(storage storage.ChunkStorage) {
+		storage.Close()
 	}
 	resetStorage := func() {
 
