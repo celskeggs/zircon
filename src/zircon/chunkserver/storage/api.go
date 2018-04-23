@@ -2,6 +2,7 @@ package storage
 
 import "zircon/apis"
 
+// An interface to a storage system for chunks and version information.
 type ChunkStorage interface {
 	// *** part 1: chunks ***
 
