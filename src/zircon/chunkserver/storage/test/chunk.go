@@ -22,7 +22,8 @@ func sortChunkNums(chunks []apis.ChunkNum) {
 }
 
 // just for the chunk part, not for the version part
-func TestChunkStorage(openStorage func() storage.ChunkStorage, resetStorage func(), t *testing.T) {
+func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func(storage.ChunkStorage),
+					  resetStorage func(), t *testing.T) {
 	assert := testifyAssert.New(t)
 
 	var s storage.ChunkStorage = nil
@@ -33,7 +34,7 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, resetStorage func
 		s = openStorage()
 		defer func() {
 			if s != nil {
-				s.Close()
+				closeStorage(s)
 				s = nil
 			}
 		}()
@@ -41,7 +42,7 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, resetStorage func
 	}
 
 	reopen := func() {
-		s.Close()
+		closeStorage(s)
 		// no reset
 		s = openStorage()
 	}
@@ -237,10 +238,10 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, resetStorage func
 
 		data, err := s.ReadVersion(70, 100)
 		assert.NoError(err)
-		assert.Equal(apis.MaxChunkSize, len(data))
-		assert.Equal(152, data[len(data) - 1])
+		assert.Equal(apis.MaxChunkSize, apis.Length(len(data)))
+		assert.Equal(uint8(152), data[len(data) - 1])
 		data[len(data) - 1] = 0
-		assert.Equal(152, write[len(write) - 1])
+		assert.Equal(uint8(152), write[len(write) - 1])
 		assert.Empty(stripTrailingZeroes(data))
 	})
 

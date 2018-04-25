@@ -8,7 +8,8 @@ import (
 )
 
 // just for the chunk part, not for the version part
-func TestVersionStorage(openStorage func() storage.ChunkStorage, resetStorage func(), t *testing.T) {
+func TestVersionStorage(openStorage func() storage.ChunkStorage, closeStorage func(storage.ChunkStorage),
+	 					resetStorage func(), t *testing.T) {
 	assert := testifyAssert.New(t)
 
 	var s storage.ChunkStorage = nil
@@ -19,7 +20,7 @@ func TestVersionStorage(openStorage func() storage.ChunkStorage, resetStorage fu
 		s = openStorage()
 		defer func() {
 			if s != nil {
-				s.Close()
+				closeStorage(s)
 				s = nil
 			}
 		}()
@@ -27,7 +28,7 @@ func TestVersionStorage(openStorage func() storage.ChunkStorage, resetStorage fu
 	}
 
 	reopen := func() {
-		s.Close()
+		closeStorage(s)
 		// no reset
 		s = openStorage()
 	}
@@ -57,7 +58,7 @@ func TestVersionStorage(openStorage func() storage.ChunkStorage, resetStorage fu
 
 		data, err := s.GetLatestVersion(71)
 		assert.NoError(err)
-		assert.Equal(3, data)
+		assert.Equal(apis.Version(3), data)
 	})
 
 	test("write single version corrolaries", func() {
@@ -85,7 +86,7 @@ func TestVersionStorage(openStorage func() storage.ChunkStorage, resetStorage fu
 
 		data, err := s.GetLatestVersion(71)
 		assert.NoError(err)
-		assert.Equal(3, data)
+		assert.Equal(apis.Version(3), data)
 	})
 
 	test("updating versions", func() {
@@ -94,7 +95,7 @@ func TestVersionStorage(openStorage func() storage.ChunkStorage, resetStorage fu
 
 		data, err := s.GetLatestVersion(71)
 		assert.NoError(err)
-		assert.Equal(3, data)
+		assert.Equal(apis.Version(3), data)
 
 		assert.NoError(s.SetLatestVersion(72, 6))
 		assert.NoError(s.SetLatestVersion(71, 2))
@@ -106,11 +107,11 @@ func TestVersionStorage(openStorage func() storage.ChunkStorage, resetStorage fu
 
 		data, err = s.GetLatestVersion(71)
 		assert.NoError(err)
-		assert.Equal(2, data)
+		assert.Equal(apis.Version(2), data)
 
 		data, err = s.GetLatestVersion(72)
 		assert.NoError(err)
-		assert.Equal(6, data)
+		assert.Equal(apis.Version(6), data)
 	})
 
 	test("updating versions with durability", func() {
@@ -121,7 +122,7 @@ func TestVersionStorage(openStorage func() storage.ChunkStorage, resetStorage fu
 
 		data, err := s.GetLatestVersion(71)
 		assert.NoError(err)
-		assert.Equal(3, data)
+		assert.Equal(apis.Version(3), data)
 
 		assert.NoError(s.SetLatestVersion(72, 6))
 		assert.NoError(s.SetLatestVersion(71, 2))
@@ -133,11 +134,11 @@ func TestVersionStorage(openStorage func() storage.ChunkStorage, resetStorage fu
 
 		data, err = s.GetLatestVersion(71)
 		assert.NoError(err)
-		assert.Equal(2, data)
+		assert.Equal(apis.Version(2), data)
 
 		data, err = s.GetLatestVersion(72)
 		assert.NoError(err)
-		assert.Equal(6, data)
+		assert.Equal(apis.Version(6), data)
 	})
 
 	test("delete subset of versions", func() {
