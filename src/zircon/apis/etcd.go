@@ -11,13 +11,12 @@ type ServerAddress string
 type EtcdInterface interface {
 	// Get the name of this server
 	GetName() ServerName
-	// Keep this etcd connection alive. If 'isChunkserver', this is a chunkserver, otherwise this is a frontend.
+	// Keep this etcd connection from this frontend alive.
 	// If this fails, the server must immediately cease performing operations!
-	KeepAlive(isChunkserver bool) error
+	KeepAlive() error
 	// List all of the alive frontends
 	ListFrontends() (map[ServerName]ServerAddress, error)
-	// List all of the alive chunkservers
-	ListChunkservers() (map[ServerName]ServerAddress, error)
+
 	// Attempt to claim a particular metametadata block; if already claimed, returns the original owner. if successfully
 	// claimed, returns our name.
 	TryClaimingMetametadata(blockid MetametadataID) (owner ServerName, err error)

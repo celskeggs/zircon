@@ -5,7 +5,6 @@ import (
 	"zircon/chunkserver/storage"
 	"testing"
 	testifyAssert "github.com/stretchr/testify/assert"
-	"zircon/etcd"
 	storageTest "zircon/chunkserver/storage/test"
 )
 
@@ -14,7 +13,6 @@ func TestChunkserverSingle(t *testing.T) {
 	assert := testifyAssert.New(t)
 
 	var chunkStorage storage.ChunkStorage = nil
-	var mockEtcd apis.EtcdInterface = nil
 	var cs apis.ChunkserverSingle = nil
 	var teardown Teardown = nil
 
@@ -22,22 +20,16 @@ func TestChunkserverSingle(t *testing.T) {
 		t.Logf("subtest: %s", name)
 		newStorage, err := storage.ConfigureMemoryStorage()
 		assert.NoError(err)
-		newEtcd, err := etcd.MockEtcdInterface()
-		assert.NoError(err)
 
 		chunkStorage = newStorage
-		mockEtcd = newEtcd
 
-		cs, teardown, err = ExposeChunkserver(chunkStorage, mockEtcd)
+		cs, teardown, err = ExposeChunkserver(chunkStorage)
 		assert.NoError(err)
 
 		defer func() {
 			if chunkStorage != nil {
 				chunkStorage.Close()
 				chunkStorage = nil
-
-				mockEtcd.Close()
-				mockEtcd = nil
 
 				teardown()
 				cs = nil
@@ -47,9 +39,13 @@ func TestChunkserverSingle(t *testing.T) {
 	}
 
 	reopen := func() {
-		// preserve storage and etcd, just recreate this interface.
+		// preserve storage, just recreate this interface.
 		teardown()
-		cs = nil
+
+		ncs, nteardown, err := ExposeChunkserver(chunkStorage)
+		assert.NoError(err)
+
+		cs, teardown = ncs, nteardown
 	}
 
 	test("empty by default", func() {
@@ -104,25 +100,25 @@ func TestChunkserverSingle(t *testing.T) {
 
 		data, version, err := cs.Read(7, 0, 256, apis.AnyVersion)
 		assert.NoError(err)
-		assert.Equal(3, version)
+		assert.Equal(apis.Version(3), version)
 		assert.Equal(256, len(data))
 		assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
 
 		data, version, err = cs.Read(7, 3, 5, 1)
 		assert.NoError(err)
-		assert.Equal(3, version)
+		assert.Equal(apis.Version(3), version)
 		assert.Equal(5, len(data))
 		assert.Equal("lo wo", string(data))
 
 		data, version, err = cs.Read(7, 128, 512, 3)
 		assert.NoError(err)
-		assert.Equal(3, version)
+		assert.Equal(apis.Version(3), version)
 		assert.Equal(512, len(data))
 		assert.Empty(storageTest.StripTrailingZeroes(data))
 
 		data, version, err = cs.Read(7, 0, 256, 4)
 		assert.Error(err)
-		assert.Equal(3, version) // should still report latest version, even if it can't be provided
+		assert.Equal(apis.Version(3), version) // should still report latest version, even if it can't be provided
 		assert.Empty(data) // no data on error
 	})
 
@@ -142,9 +138,23 @@ func TestChunkserverSingle(t *testing.T) {
 
 		data, version, err := cs.Read(7, 0, 256, apis.AnyVersion)
 		assert.NoError(err)
-		assert.Equal(3, version)
+		assert.Equal(apis.Version(3), version)
 		assert.Equal(256, len(data))
 		assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
+	})
+
+	test("create new entry duplicate", func() {
+		assert.NoError(cs.Add(7, []byte("hello world"), 3))
+		assert.Error(cs.Add(7, []byte("goodbye world"), 4))
+
+		chunks, err := cs.ListAllChunks()
+		assert.NoError(err)
+		assert.Equal([]struct {
+			Chunk apis.ChunkNum
+			Version apis.Version
+		}{
+			{7, 3},
+		}, chunks)
 	})
 
 	test("delete entry", func() {
@@ -161,7 +171,7 @@ func TestChunkserverSingle(t *testing.T) {
 
 		data, version, err := cs.Read(7, 0, 256, apis.AnyVersion)
 		assert.Error(err)
-		assert.Equal(0, version) // version should be zero if none are available when the error occurs
+		assert.Equal(apis.Version(0), version) // version should be zero if none are available when the error occurs
 		assert.Empty(data) // no data on failure
 	})
 
@@ -183,7 +193,7 @@ func TestChunkserverSingle(t *testing.T) {
 
 		data, version, err := cs.Read(7, 0, 256, apis.AnyVersion)
 		assert.Error(err)
-		assert.Equal(0, version) // version should be zero if none are available when the error occurs
+		assert.Equal(apis.Version(0), version) // version should be zero if none are available when the error occurs
 		assert.Empty(data) // no data on failure
 	})
 
@@ -202,8 +212,8 @@ func TestChunkserverSingle(t *testing.T) {
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
 		assert.Equal(2, len(chunks))
-		assert.Equal(7, chunks[0].Chunk)
-		assert.Equal(7, chunks[1].Chunk)
+		assert.Equal(apis.ChunkNum(7), chunks[0].Chunk)
+		assert.Equal(apis.ChunkNum(7), chunks[1].Chunk)
 
 		assert.True(chunks[0].Version == 3 || chunks[0].Version == 4)
 		assert.True(chunks[1].Version == 3 || chunks[1].Version == 4)
@@ -212,15 +222,15 @@ func TestChunkserverSingle(t *testing.T) {
 		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3 } {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
-			assert.Equal(3, ver)
+			assert.Equal(apis.Version(3), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("hello world", storageTest.StripTrailingZeroes(data))
+			assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
 		}
 
 		// should *NOT* be exposed at all yet!
 		data, ver, err := cs.Read(7, 0, 16, 4)
 		assert.Error(err)
-		assert.Equal(3, ver)
+		assert.Equal(apis.Version(3), ver)
 		assert.Empty(data)
 
 		assert.Error(cs.UpdateLatestVersion(7, 2, 4))
@@ -239,9 +249,9 @@ func TestChunkserverSingle(t *testing.T) {
 		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3, 4 } {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
-			assert.Equal(4, ver)
+			assert.Equal(apis.Version(4), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("Hello world", storageTest.StripTrailingZeroes(data))
+			assert.Equal("Hello world", string(storageTest.StripTrailingZeroes(data)))
 		}
 	})
 
@@ -261,8 +271,8 @@ func TestChunkserverSingle(t *testing.T) {
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
 		assert.Equal(2, len(chunks))
-		assert.Equal(7, chunks[0].Chunk)
-		assert.Equal(7, chunks[1].Chunk)
+		assert.Equal(apis.ChunkNum(7), chunks[0].Chunk)
+		assert.Equal(apis.ChunkNum(7), chunks[1].Chunk)
 
 		assert.True(chunks[0].Version == 3 || chunks[0].Version == 4)
 		assert.True(chunks[1].Version == 3 || chunks[1].Version == 4)
@@ -271,15 +281,15 @@ func TestChunkserverSingle(t *testing.T) {
 		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3 } {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
-			assert.Equal(3, ver)
+			assert.Equal(apis.Version(3), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("hello world", storageTest.StripTrailingZeroes(data))
+			assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
 		}
 
 		// should *NOT* be exposed at all yet!
 		data, ver, err := cs.Read(7, 0, 16, 4)
 		assert.Error(err)
-		assert.Equal(3, ver)
+		assert.Equal(apis.Version(3), ver)
 		assert.Empty(data)
 
 		reopen()
@@ -300,9 +310,9 @@ func TestChunkserverSingle(t *testing.T) {
 		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3, 4 } {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
-			assert.Equal(4, ver)
+			assert.Equal(apis.Version(4), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("Hello world", storageTest.StripTrailingZeroes(data))
+			assert.Equal("Hello world", string(storageTest.StripTrailingZeroes(data)))
 		}
 	})
 
@@ -334,15 +344,15 @@ func TestChunkserverSingle(t *testing.T) {
 		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3 } {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
-			assert.Equal(3, ver)
+			assert.Equal(apis.Version(3), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("hello world", storageTest.StripTrailingZeroes(data))
+			assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
 		}
 
 		// should not exist at all!
 		data, ver, err := cs.Read(7, 0, 16, 4)
 		assert.Error(err)
-		assert.Equal(3, ver)
+		assert.Equal(apis.Version(3), ver)
 		assert.Empty(data)
 
 		assert.Error(cs.UpdateLatestVersion(7, 3, 4))

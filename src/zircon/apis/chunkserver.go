@@ -31,7 +31,8 @@ type Chunkserver interface {
 	Replicate(serverAddress ServerAddress, subref ChunkNum, version Version) (error)
 }
 
-// A limited form of the chunkserver interface that doesn't include any APIs that connect to other chunkservers
+// A limited form of the chunkserver interface that doesn't include any APIs that connect to other chunkservers.
+// This interface is threadsafe.
 type ChunkserverSingle interface {
 	// ** methods used by clients and metadata caches **
 
