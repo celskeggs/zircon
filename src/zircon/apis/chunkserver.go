@@ -55,8 +55,8 @@ type ChunkserverSingle interface {
 	// Takes existing saved data for oldVersion, apply this cached write, and saved it as newVersion.
 	CommitWrite(chunk ChunkNum, hash CommitHash, oldVersion Version, newVersion Version) (error)
 
-	// Update the version of this chunk that will be returned to clients. (Also allowing this chunkserver to delete
-	// older versions.)
+	// Update the version of this chunk that will be returned to clients.
+	// Deletes any chunk versions older than this new version.
 	// If the current version reported to clients is different from the oldVersion, errors.
 	UpdateLatestVersion(chunk ChunkNum, oldVersion Version, newVersion Version) error
 
@@ -71,5 +71,6 @@ type ChunkserverSingle interface {
 	Delete(chunk ChunkNum, version Version) (error)
 
 	// Requests a list of all chunks currently held by this chunkserver.
+	// There is no guaranteed order for the returned slice.
 	ListAllChunks() ([]struct{ Chunk ChunkNum; Version Version }, error)
 }

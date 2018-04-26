@@ -27,4 +27,7 @@ type EtcdInterface interface {
 	GetMetametadata(blockid MetametadataID) (Metametadata, error)
 	// Update metametadata; only allowed if this server has a current claim on the block
 	UpdateMetametadata(blockid MetametadataID, data Metametadata) error
+
+	// tear down this connection
+	Close()
 }
