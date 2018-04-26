@@ -28,7 +28,7 @@ type Chunkserver interface {
 	// This will use 'subref' to call 'Add' on the other chunkserver at 'serverAddress'.
 	// Replication will only take place assuming that the 'version' specified is the version stored.
 	// This will return success once the operation has completed successfully.
-	Replicate(serverAddress ServerAddress, subref ChunkNum, version Version) (error)
+	Replicate(chunk ChunkNum, serverAddress ServerAddress, version Version) (error)
 }
 
 // A limited form of the chunkserver interface that doesn't include any APIs that connect to other chunkservers.

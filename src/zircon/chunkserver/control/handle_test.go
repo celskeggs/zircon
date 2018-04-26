@@ -5,7 +5,7 @@ import (
 	"zircon/chunkserver/storage"
 	"testing"
 	testifyAssert "github.com/stretchr/testify/assert"
-	storageTest "zircon/chunkserver/storage/test"
+	"zircon/util"
 )
 
 // just for the chunk part, not for the version part
@@ -102,7 +102,7 @@ func TestChunkserverSingle(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(apis.Version(3), version)
 		assert.Equal(256, len(data))
-		assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
+		assert.Equal("hello world", string(util.StripTrailingZeroes(data)))
 
 		data, version, err = cs.Read(7, 3, 5, 1)
 		assert.NoError(err)
@@ -114,7 +114,7 @@ func TestChunkserverSingle(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(apis.Version(3), version)
 		assert.Equal(512, len(data))
-		assert.Empty(storageTest.StripTrailingZeroes(data))
+		assert.Empty(util.StripTrailingZeroes(data))
 
 		data, version, err = cs.Read(7, 0, 256, 4)
 		assert.Error(err)
@@ -140,7 +140,7 @@ func TestChunkserverSingle(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(apis.Version(3), version)
 		assert.Equal(256, len(data))
-		assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
+		assert.Equal("hello world", string(util.StripTrailingZeroes(data)))
 	})
 
 	test("create new entry duplicate", func() {
@@ -224,7 +224,7 @@ func TestChunkserverSingle(t *testing.T) {
 			assert.NoError(err)
 			assert.Equal(apis.Version(3), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
+			assert.Equal("hello world", string(util.StripTrailingZeroes(data)))
 		}
 
 		// should *NOT* be exposed at all yet!
@@ -251,7 +251,7 @@ func TestChunkserverSingle(t *testing.T) {
 			assert.NoError(err)
 			assert.Equal(apis.Version(4), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("Hello world", string(storageTest.StripTrailingZeroes(data)))
+			assert.Equal("Hello world", string(util.StripTrailingZeroes(data)))
 		}
 	})
 
@@ -283,7 +283,7 @@ func TestChunkserverSingle(t *testing.T) {
 			assert.NoError(err)
 			assert.Equal(apis.Version(3), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
+			assert.Equal("hello world", string(util.StripTrailingZeroes(data)))
 		}
 
 		// should *NOT* be exposed at all yet!
@@ -312,7 +312,7 @@ func TestChunkserverSingle(t *testing.T) {
 			assert.NoError(err)
 			assert.Equal(apis.Version(4), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("Hello world", string(storageTest.StripTrailingZeroes(data)))
+			assert.Equal("Hello world", string(util.StripTrailingZeroes(data)))
 		}
 	})
 
@@ -346,7 +346,7 @@ func TestChunkserverSingle(t *testing.T) {
 			assert.NoError(err)
 			assert.Equal(apis.Version(3), ver)
 			assert.Equal(16, len(data))
-			assert.Equal("hello world", string(storageTest.StripTrailingZeroes(data)))
+			assert.Equal("hello world", string(util.StripTrailingZeroes(data)))
 		}
 
 		// should not exist at all!
