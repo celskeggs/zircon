@@ -13,11 +13,11 @@ import (
 
 func newTestCS(t *testing.T, cache rpc.ConnectionCache) (apis.Chunkserver, control.Teardown) {
 	mem, err := storage.ConfigureMemoryStorage()
-	require.Error(t, err)
+	require.NoError(t, err)
 	single, teardown, err := control.ExposeChunkserver(mem)
-	require.Error(t, err)
+	require.NoError(t, err)
 	server, err := WithChatter(single, cache)
-	require.Error(t, err)
+	require.NoError(t, err)
 	return server, func() {
 		teardown()
 		mem.Close()
@@ -27,8 +27,7 @@ func newTestCS(t *testing.T, cache rpc.ConnectionCache) (apis.Chunkserver, contr
 func TestChatterReplicate(t *testing.T) {
 	assert := testifyAssert.New(t)
 
-	cache, err := rpc.NewConnectionCache()
-	assert.NoError(err)
+	cache := rpc.NewConnectionCache()
 
 	main, mainT := newTestCS(t, cache)
 	defer mainT()
@@ -37,7 +36,7 @@ func TestChatterReplicate(t *testing.T) {
 
 	teardown, address, err := rpc.PublishChunkserver(alt, ":0")
 	assert.NoError(err)
-	defer teardown()
+	defer teardown(true)
 
 	err = main.Add(73, []byte("hello world"), 2)
 	assert.NoError(err)
@@ -49,14 +48,13 @@ func TestChatterReplicate(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(apis.Version(2), ver)
 	assert.Equal(16, len(data))
-	assert.Equal("hello world", util.StripTrailingZeroes(data))
+	assert.Equal("hello world", string(util.StripTrailingZeroes(data)))
 }
 
 func TestChatterStartReplicated(t *testing.T) {
 	assert := testifyAssert.New(t)
 
-	cache, err := rpc.NewConnectionCache()
-	assert.NoError(err)
+	cache := rpc.NewConnectionCache()
 
 	main, mainT := newTestCS(t, cache)
 	defer mainT()
@@ -67,12 +65,16 @@ func TestChatterStartReplicated(t *testing.T) {
 
 	teardown1, address1, err := rpc.PublishChunkserver(alt1, ":0")
 	assert.NoError(err)
-	defer teardown1()
+	defer teardown1(true)
 	teardown2, address2, err := rpc.PublishChunkserver(alt2, ":0")
 	assert.NoError(err)
-	defer teardown2()
+	defer teardown2(true)
 
 	err = main.Add(73, []byte("hello world"), 2)
+	assert.NoError(err)
+	err = alt1.Add(73, []byte("hello world"), 2)
+	assert.NoError(err)
+	err = alt2.Add(73, []byte("hello world"), 2)
 	assert.NoError(err)
 
 	hash := apis.CalculateCommitHash(6, []byte("universe"))
