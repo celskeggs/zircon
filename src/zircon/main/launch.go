@@ -8,12 +8,16 @@ import (
 	"zircon/rpc"
 	"zircon/chunkserver/control"
 	"zircon/chunkserver/storage"
+	"zircon/client"
+	"zircon/client/demo"
 )
 
 type Config struct {
 	Address string
 	StorageType string
 	StoragePath string
+
+	ClientConfig client.Configuration
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -29,14 +33,10 @@ func LoadConfig(path string) (*Config, error) {
 	return config, err
 }
 
-func LaunchChunkserver(config *Config) error {
-	conncache := rpc.NewConnectionCache()
-
-	var store storage.ChunkStorage
-	var err error
+func ConfigureChunkserverStorage(config *Config) (store storage.ChunkStorage, err error) {
 	switch config.StorageType {
 	case "":
-		return fmt.Errorf("no specified kind of storage for chunkserver")
+		err = fmt.Errorf("no specified kind of storage for chunkserver")
 	case "memory":
 		store, err = storage.ConfigureMemoryStorage()
 	case "filesystem":
@@ -44,8 +44,16 @@ func LaunchChunkserver(config *Config) error {
 	case "block":
 		store, err = storage.ConfigureBlockStorage(config.StoragePath)
 	default:
-		return fmt.Errorf("no such storage type: %s\n", config.StorageType)
+		err = fmt.Errorf("no such storage type: %s\n", config.StorageType)
 	}
+	return store, err
+}
+
+func LaunchChunkserver(config *Config) error {
+	conncache := rpc.NewConnectionCache()
+	defer conncache.CloseAll()
+
+	store, err := ConfigureChunkserverStorage(config)
 	if err != nil {
 		return err
 	}
@@ -74,7 +82,15 @@ func LaunchFrontend(config *Config) error {
 }
 
 func LaunchDemoClient(config *Config) error {
-	panic("unimplemented")
+	conncache := rpc.NewConnectionCache()
+	defer conncache.CloseAll()
+
+	clientConnection, err := client.ConfigureClient(&config.ClientConfig, conncache)
+	if err != nil {
+		return err
+	}
+
+	return demo.LaunchDemo(clientConnection)
 }
 
 // parses out command-line arguments, determines what kind of server to run, then calls all of the relevant construction
