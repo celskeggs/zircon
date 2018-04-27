@@ -31,7 +31,7 @@ type conncache struct {
 	closed       bool
 }
 
-func NewConnectionCache() (ConnectionCache, error) {
+func NewConnectionCache() (ConnectionCache) {
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout:   5 * time.Second,
@@ -52,7 +52,7 @@ func NewConnectionCache() (ConnectionCache, error) {
 		transport: transport,
 		chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
 		frontends: map[apis.ServerAddress]apis.Frontend{},
-	}, nil
+	}
 }
 
 func (c *conncache) SubscribeChunkserver(address apis.ServerAddress) (apis.Chunkserver, error) {

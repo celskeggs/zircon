@@ -11,8 +11,7 @@ import (
 func beginTest(t *testing.T) (*testifyAssert.Assertions, *MockChunkserver, func(), apis.Chunkserver) {
 	assert := testifyAssert.New(t)
 
-	cache, err := NewConnectionCache()
-	assert.NoError(err)
+	cache := NewConnectionCache()
 
 	mocked := new(MockChunkserver)
 
@@ -25,7 +24,7 @@ func beginTest(t *testing.T) (*testifyAssert.Assertions, *MockChunkserver, func(
 	return assert, mocked, func () {
 		mocked.AssertExpectations(t)
 
-		teardown()
+		teardown(true)
 		cache.CloseAll()
 	}, server
 }

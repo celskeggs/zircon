@@ -19,7 +19,7 @@ func UncachedSubscribeChunkserver(address apis.ServerAddress, client *http.Clien
 }
 
 // Starts serving an RPC handler for a Chunkserver on a certain address. Runs forever.
-func PublishChunkserver(server apis.Chunkserver, address string) (func() error, apis.ServerAddress, error) {
+func PublishChunkserver(server apis.Chunkserver, address string) (func(kill bool) error, apis.ServerAddress, error) {
 	tserve := twirp.NewChunkserverServer(&proxyChunkserverAsTwirp{server: server}, nil)
 
 	if address == "" {
@@ -47,10 +47,13 @@ func PublishChunkserver(server apis.Chunkserver, address string) (func() error, 
 		termErr <- err
 	}()
 
-	teardown := func() error {
-		err1 := httpServer.Shutdown(context.Background())
-		if err1 == nil {
-			err1 = listener.Close()
+	teardown := func(kill bool) error {
+		var err1 error
+		if kill {
+			err1 = httpServer.Shutdown(context.Background())
+			if err1 == nil {
+				err1 = listener.Close()
+			}
 		}
 		err2 := <-termErr
 		if err1 == nil {
