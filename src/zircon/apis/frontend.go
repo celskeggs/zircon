@@ -23,7 +23,7 @@ type Frontend interface {
 
 	// Destroys an old chunk, assuming that the metadata version matches. This includes sending messages to all relevant
 	// chunkservers.
-	Delete(chunk ChunkNum, version Version)
+	Delete(chunk ChunkNum, version Version) error
 }
 
 // Calculates a hash of a write. This is used to ensure that the same data has been replicated to all chunkservers,
