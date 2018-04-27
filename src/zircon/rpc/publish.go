@@ -2,7 +2,11 @@ package rpc
 
 import (
 	"zircon/apis"
-	"zircon/chunkserver/control"
+	"sync"
+	"errors"
+	"net/http"
+	"time"
+	"net"
 )
 
 type ConnectionCache interface {
@@ -18,16 +22,84 @@ type ConnectionCache interface {
 	CloseAll()
 }
 
+type conncache struct {
+	mu           sync.Mutex
+	chunkservers map[apis.ServerAddress]apis.Chunkserver
+	frontends    map[apis.ServerAddress]apis.Frontend
+	client       *http.Client
+	transport    *http.Transport
+	closed       bool
+}
+
 func NewConnectionCache() (ConnectionCache, error) {
-	panic("unimplemented")
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	client := &http.Client{
+		Timeout: time.Second,
+		Transport: transport,
+	}
+	return &conncache{
+		client: client,
+		transport: transport,
+		chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
+		frontends: map[apis.ServerAddress]apis.Frontend{},
+	}, nil
 }
 
-// Starts serving an RPC handler for a Chunkserver on a certain address. Runs forever.
-func PublishChunkserver(server apis.Chunkserver, address string) (control.Teardown, apis.ServerAddress, error) {
-	panic("unimplemented")
+func (c *conncache) SubscribeChunkserver(address apis.ServerAddress) (apis.Chunkserver, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil, errors.New("attempt to use closed connection cache")
+	}
+
+	existingConnection, exists := c.chunkservers[address]
+	if exists {
+		return existingConnection, nil
+	} else {
+		newConnection, err := UncachedSubscribeChunkserver(address, c.client)
+		if err != nil {
+			return nil, err
+		}
+		c.chunkservers[address] = newConnection
+		return newConnection, nil
+	}
 }
 
-// Starts serving an RPC handler for a Frontend on a certain address. Runs forever.
-func PublishFrontend(server apis.Frontend, address apis.ServerAddress) error {
-	panic("unimplemented")
+func (c *conncache) SubscribeFrontend(address apis.ServerAddress) (apis.Frontend, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil, errors.New("attempt to use closed connection cache")
+	}
+
+	existingConnection, exists := c.frontends[address]
+	if exists {
+		return existingConnection, nil
+	} else {
+		newConnection, err := UncachedSubscribeFrontend(address, c.client)
+		if err != nil {
+			return nil, err
+		}
+		c.frontends[address] = newConnection
+		return newConnection, nil
+	}
+}
+
+func (c *conncache) CloseAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	c.transport.CloseIdleConnections()
 }
