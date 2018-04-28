@@ -1,7 +1,5 @@
 package apis
 
-// import "github.com/coreos/etcd/clientv3"
-
 // The name of a server
 type ServerName string
 
@@ -14,22 +12,24 @@ type ServerID uint32
 type EtcdInterface interface {
 	// Get the name of this server
 	GetName() ServerName
-	// Keep this etcd connection from this frontend alive.
-	// If this fails, the server must immediately cease performing operations!
-	KeepAlive() error
-	// List all of the alive frontends
-	ListFrontends() (map[ServerName]ServerAddress, error)
 
-	// Attempt to claim a particular metametadata block; if already claimed, returns the original owner. if successfully
+	// Get the address of a particular server by name
+	GetAddress(name ServerName) (ServerAddress, error)
+	// Update the address of this server
+	UpdateAddress(address ServerAddress) error
+
+	// Attempt to claim a particular metadata block; if already claimed, returns the original owner. if successfully
 	// claimed, returns our name.
-	TryClaimingMetametadata(blockid MetametadataID) (owner ServerName, err error)
-	// Assuming that this server owns a particular block of metametadata, release that metadata back out into the wild.
-	DisclaimMetametadata(blockid MetametadataID) error
-	// Get metametadata; only allowed if this server has a current claim on the block
-	GetMetametadata(blockid MetametadataID) (Metametadata, error)
-	// Update metametadata; only allowed if this server has a current claim on the block
-	UpdateMetametadata(blockid MetametadataID, data Metametadata) error
+	TryClaimingMetadata(blockid MetadataID) (owner ServerName, err error)
+	// Assuming that this server owns a particular block of metadata, release that metadata back out into the wild.
+	DisclaimMetadata(blockid MetadataID) error
+	// Get metadata; only allowed if this server has a current claim on the block
+	GetMetadata(blockid MetadataID) (Metadata, error)
+	// Update metadata; only allowed if this server has a current claim on the block
+	UpdateMetadata(blockid MetadataID, data Metadata) error
+	// Renew the claim on all metadata blocks
+	RenewMetadataClaims() error
 
 	// tear down this connection
-	Close()
+	Close() error
 }
