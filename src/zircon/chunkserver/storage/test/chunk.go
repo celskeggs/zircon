@@ -6,14 +6,8 @@ import (
 	testifyAssert "github.com/stretchr/testify/assert"
 	"zircon/apis"
 	"sort"
+	"zircon/util"
 )
-
-func stripTrailingZeroes(data []byte) []byte {
-	for len(data) > 0 && data[len(data) - 1] == 0 {
-		data = data[:len(data) - 1]
-	}
-	return data
-}
 
 func sortChunkNums(chunks []apis.ChunkNum) {
 	sort.Slice(chunks, func(i, j int) bool {
@@ -83,7 +77,7 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 		data, err := s.ReadVersion(71, 3)
 		assert.NoError(err)
-		assert.Equal([]byte("hello, world!"), stripTrailingZeroes(data))
+		assert.Equal([]byte("hello, world!"), util.StripTrailingZeroes(data))
 	})
 
 	test("write single chunk corrolaries", func() {
@@ -120,7 +114,7 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 		data, err := s.ReadVersion(71, 3)
 		assert.NoError(err)
-		assert.Equal([]byte("hello, world!"), stripTrailingZeroes(data))
+		assert.Equal([]byte("hello, world!"), util.StripTrailingZeroes(data))
 	})
 
 	test("update single chunk durability", func() {
@@ -140,10 +134,10 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 		data, err := s.ReadVersion(71, 3)
 		assert.NoError(err)
-		assert.Equal([]byte("hello, world!"), stripTrailingZeroes(data))
+		assert.Equal([]byte("hello, world!"), util.StripTrailingZeroes(data))
 		data, err = s.ReadVersion(71, 4)
 		assert.NoError(err)
-		assert.Equal([]byte("goodbye, world!"), stripTrailingZeroes(data))
+		assert.Equal([]byte("goodbye, world!"), util.StripTrailingZeroes(data))
 	})
 
 	test("prevent rewriting versions", func() {
@@ -155,7 +149,7 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 		data, err := s.ReadVersion(71, 3)
 		assert.NoError(err)
-		assert.Equal([]byte("hello, world!"), stripTrailingZeroes(data))
+		assert.Equal([]byte("hello, world!"), util.StripTrailingZeroes(data))
 	})
 
 	test("write multiple chunks and versions", func() {
@@ -178,15 +172,15 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 		data, err := s.ReadVersion(71, 2)
 		assert.NoError(err)
-		assert.Equal([]byte("71-2"), stripTrailingZeroes(data))
+		assert.Equal([]byte("71-2"), util.StripTrailingZeroes(data))
 
 		data, err = s.ReadVersion(72, 1)
 		assert.NoError(err)
-		assert.Equal([]byte("72-1"), stripTrailingZeroes(data))
+		assert.Equal([]byte("72-1"), util.StripTrailingZeroes(data))
 
 		data, err = s.ReadVersion(71, 3)
 		assert.NoError(err)
-		assert.Equal([]byte("71-3"), stripTrailingZeroes(data))
+		assert.Equal([]byte("71-3"), util.StripTrailingZeroes(data))
 	})
 
 	test("write multiple chunks and versions with durability", func() {
@@ -211,15 +205,15 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 		data, err := s.ReadVersion(71, 2)
 		assert.NoError(err)
-		assert.Equal([]byte("71-2"), stripTrailingZeroes(data))
+		assert.Equal([]byte("71-2"), util.StripTrailingZeroes(data))
 
 		data, err = s.ReadVersion(72, 1)
 		assert.NoError(err)
-		assert.Equal([]byte("72-1"), stripTrailingZeroes(data))
+		assert.Equal([]byte("72-1"), util.StripTrailingZeroes(data))
 
 		data, err = s.ReadVersion(71, 3)
 		assert.NoError(err)
-		assert.Equal([]byte("71-3"), stripTrailingZeroes(data))
+		assert.Equal([]byte("71-3"), util.StripTrailingZeroes(data))
 	})
 
 	test("write maximum length chunk of zeroes", func() {
@@ -228,7 +222,7 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 		data, err := s.ReadVersion(70, 100)
 		assert.NoError(err)
-		assert.Empty(stripTrailingZeroes(data))
+		assert.Empty(util.StripTrailingZeroes(data))
 	})
 
 	test("write maximum length chunk with nonzero element", func() {
@@ -242,7 +236,7 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 		assert.Equal(uint8(152), data[len(data) - 1])
 		data[len(data) - 1] = 0
 		assert.Equal(uint8(152), write[len(write) - 1])
-		assert.Empty(stripTrailingZeroes(data))
+		assert.Empty(util.StripTrailingZeroes(data))
 	})
 
 	test("write too large chunk", func() {
@@ -259,7 +253,7 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 		data, err := s.ReadVersion(70, 100)
 		assert.NoError(err)
-		assert.Equal([]byte{}, stripTrailingZeroes(data))
+		assert.Equal([]byte{}, util.StripTrailingZeroes(data))
 	})
 
 	test("delete subset of versions", func() {

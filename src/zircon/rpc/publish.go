@@ -1,0 +1,105 @@
+package rpc
+
+import (
+	"zircon/apis"
+	"sync"
+	"errors"
+	"net/http"
+	"time"
+	"net"
+)
+
+type ConnectionCache interface {
+	// Subscribes to a chunkserver over the network on a specific address.
+	// This caches connections.
+	// Failure to connect does *not* cause an error here; just timeouts when trying to call specific methods.
+	SubscribeChunkserver(address apis.ServerAddress) (apis.Chunkserver, error)
+
+	// Subscribes to a frontend RPC server over the network on a specific address.
+	// Failure to connect does *not* cause an error here; just timeouts when trying to call specific methods.
+	SubscribeFrontend(address apis.ServerAddress) (apis.Frontend, error)
+
+	CloseAll()
+}
+
+type conncache struct {
+	mu           sync.Mutex
+	chunkservers map[apis.ServerAddress]apis.Chunkserver
+	frontends    map[apis.ServerAddress]apis.Frontend
+	client       *http.Client
+	transport    *http.Transport
+	closed       bool
+}
+
+func NewConnectionCache() (ConnectionCache) {
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	client := &http.Client{
+		Timeout: time.Second,
+		Transport: transport,
+	}
+	return &conncache{
+		client: client,
+		transport: transport,
+		chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
+		frontends: map[apis.ServerAddress]apis.Frontend{},
+	}
+}
+
+func (c *conncache) SubscribeChunkserver(address apis.ServerAddress) (apis.Chunkserver, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil, errors.New("attempt to use closed connection cache")
+	}
+
+	existingConnection, exists := c.chunkservers[address]
+	if exists {
+		return existingConnection, nil
+	} else {
+		newConnection, err := UncachedSubscribeChunkserver(address, c.client)
+		if err != nil {
+			return nil, err
+		}
+		c.chunkservers[address] = newConnection
+		return newConnection, nil
+	}
+}
+
+func (c *conncache) SubscribeFrontend(address apis.ServerAddress) (apis.Frontend, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil, errors.New("attempt to use closed connection cache")
+	}
+
+	existingConnection, exists := c.frontends[address]
+	if exists {
+		return existingConnection, nil
+	} else {
+		newConnection, err := UncachedSubscribeFrontend(address, c.client)
+		if err != nil {
+			return nil, err
+		}
+		c.frontends[address] = newConnection
+		return newConnection, nil
+	}
+}
+
+func (c *conncache) CloseAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	c.transport.CloseIdleConnections()
+}

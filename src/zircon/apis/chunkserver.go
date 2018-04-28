@@ -28,10 +28,11 @@ type Chunkserver interface {
 	// This will use 'subref' to call 'Add' on the other chunkserver at 'serverAddress'.
 	// Replication will only take place assuming that the 'version' specified is the version stored.
 	// This will return success once the operation has completed successfully.
-	Replicate(serverAddress ServerAddress, subref ChunkNum, version Version) (error)
+	Replicate(chunk ChunkNum, serverAddress ServerAddress, version Version) (error)
 }
 
-// A limited form of the chunkserver interface that doesn't include any APIs that connect to other chunkservers
+// A limited form of the chunkserver interface that doesn't include any APIs that connect to other chunkservers.
+// This interface is threadsafe.
 type ChunkserverSingle interface {
 	// ** methods used by clients and metadata caches **
 
@@ -55,8 +56,8 @@ type ChunkserverSingle interface {
 	// Takes existing saved data for oldVersion, apply this cached write, and saved it as newVersion.
 	CommitWrite(chunk ChunkNum, hash CommitHash, oldVersion Version, newVersion Version) (error)
 
-	// Update the version of this chunk that will be returned to clients. (Also allowing this chunkserver to delete
-	// older versions.)
+	// Update the version of this chunk that will be returned to clients.
+	// Deletes any chunk versions older than this new version.
 	// If the current version reported to clients is different from the oldVersion, errors.
 	UpdateLatestVersion(chunk ChunkNum, oldVersion Version, newVersion Version) error
 
@@ -71,5 +72,6 @@ type ChunkserverSingle interface {
 	Delete(chunk ChunkNum, version Version) (error)
 
 	// Requests a list of all chunks currently held by this chunkserver.
+	// There is no guaranteed order for the returned slice.
 	ListAllChunks() ([]struct{ Chunk ChunkNum; Version Version }, error)
 }

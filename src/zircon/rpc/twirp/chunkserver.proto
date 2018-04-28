@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package zircon.rpc.twirp;
+option go_package = "zircon/rpc/twirp";
+
+service Chunkserver {
+    rpc StartWriteReplicated (Chunkserver_StartWriteReplicated) returns (Nothing);
+    rpc Replicate (Chunkserver_Replicate) returns (Nothing);
+    rpc Read (Chunkserver_Read) returns (Chunkserver_Read_Result);
+    rpc StartWrite(Chunkserver_StartWrite) returns (Nothing);
+    rpc CommitWrite(Chunkserver_CommitWrite) returns (Nothing);
+    rpc UpdateLatestVersion(Chunkserver_UpdateLatestVersion) returns (Nothing);
+    rpc Add(Chunkserver_Add) returns (Nothing);
+    rpc Delete(Chunkserver_Delete) returns (Nothing);
+    rpc ListAllChunks(Nothing) returns (Chunkserver_ListAllChunks_Result);
+}
+
+message Chunkserver_StartWriteReplicated {
+    uint64 chunk = 1;
+    uint32 offset = 2;
+    bytes data = 3;
+    repeated string address = 4;
+}
+
+message Chunkserver_Replicate {
+    uint64 chunk = 1;
+    uint64 version = 2;
+    string serverAddress = 3;
+}
+
+message Chunkserver_Read {
+    uint64 chunk = 1;
+    uint32 offset = 2;
+    uint32 length = 3;
+    uint64 version = 4;
+}
+
+message Chunkserver_Read_Result {
+    bytes data = 1;
+    uint64 version = 2;
+    string error = 3; // separate here, because we also need to return version
+}
+
+message Chunkserver_StartWrite {
+    uint64 chunk = 1;
+    uint32 offset = 2;
+    bytes data = 3;
+}
+
+message Chunkserver_CommitWrite {
+    uint64 chunk = 1;
+    string hash = 2;
+    uint64 oldVersion = 3;
+    uint64 newVersion = 4;
+}
+
+message Chunkserver_UpdateLatestVersion {
+    uint64 chunk = 1;
+    uint64 oldVersion = 2;
+    uint64 newVersion = 3;
+}
+
+message Chunkserver_Add {
+    uint64 chunk = 1;
+    bytes initialData = 2;
+    uint64 version = 3;
+}
+
+message Chunkserver_Delete {
+    uint64 chunk = 1;
+    uint64 version = 2;
+}
+
+message Nothing {
+    // nothing
+}
+
+message Chunkserver_ListAllChunks_Result {
+    repeated ChunkVersion chunks = 1;
+}
+
+message ChunkVersion {
+    uint64 chunk = 1;
+    uint64 version = 2;
+}
