@@ -9,8 +9,8 @@ import (
 type CommitHash string
 
 type Frontend interface {
-	// Reads metadata about a particular chunk.
-	ReadMetadata(chunk ChunkNum) (Version, []ServerAddress, error)
+	// Reads the metadata entry of a particular chunk.
+	ReadMetadataEntry(chunk ChunkNum) (Version, []ServerAddress, error)
 
 	// Writes metadata for a particular chunk, after each chunkserver has received a preparation message for this write.
 	// Only performs the write if the version matches.
