@@ -17,6 +17,8 @@ type EtcdInterface interface {
 	GetAddress(name ServerName) (ServerAddress, error)
 	// Update the address of this server
 	UpdateAddress(address ServerAddress) error
+	// Get the name corresponding to a ServerID
+	GetNameByID(id ServerID) (ServerName, error)
 
 	// Attempt to claim a particular metadata block; if already claimed, returns the original owner. if successfully
 	// claimed, returns our name.

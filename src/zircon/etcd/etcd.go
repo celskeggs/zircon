@@ -41,6 +41,11 @@ func (e *etcdinterface) UpdateAddress(address apis.ServerAddress) error {
 	panic("unimplemented")
 }
 
+// Get the name corresponding to a ServerID
+func (e *etcdinterface) GetNameByID(address apis.ServerName) error {
+	panic("unimplemented")
+}
+
 // Attempt to claim a particular metadata block; if already claimed, returns the original owner. if successfully
 // claimed, returns our name.
 func (e *etcdinterface) TryClaimingMetadata(blockid apis.MetadataID) (owner apis.ServerName, err error) {
