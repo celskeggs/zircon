@@ -8,6 +8,11 @@ type Metametadata struct {
 	Locations []ServerName
 }
 
+type Metadata struct {
+	Version  Version
+	Replicas []ServerID
+}
+
 type MetadataCache interface {
 	// TODO
 }

@@ -8,6 +8,9 @@ type ServerName string
 // The address of a server
 type ServerAddress string
 
+// The space efficient id of a server
+type ServerID uint32
+
 type EtcdInterface interface {
 	// Get the name of this server
 	GetName() ServerName
