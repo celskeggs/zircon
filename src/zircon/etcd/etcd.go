@@ -3,6 +3,8 @@ package etcd
 import (
 	"github.com/coreos/etcd/clientv3"
 	"zircon/apis"
+	"context"
+	"fmt"
 )
 
 type etcdinterface struct {
@@ -33,12 +35,20 @@ func (e *etcdinterface) GetName() apis.ServerName {
 
 // Get the address of a particular server by name
 func (e *etcdinterface) GetAddress(name apis.ServerName) (apis.ServerAddress, error) {
-	panic("unimplemented")
+	response, err := e.Client.Get(context.Background(), "/server/addresses/" + name)
+	if err != nil {
+		return "", err
+	}
+	if len(response.Kvs) == 0 {
+		return "", fmt.Errorf("no address for server: %s", name)
+	}
+	return apis.ServerAddress(response.Kvs[0].Value), nil
 }
 
 // Update the address of this server
 func (e *etcdinterface) UpdateAddress(address apis.ServerAddress) error {
-	panic("unimplemented")
+	_, err := e.Client.Put(context.Background(), "/server/addresses/" + e.LocalName, string(address))
+	return err
 }
 
 // Get the name corresponding to a ServerID
@@ -49,7 +59,26 @@ func (e *etcdinterface) GetNameByID(address apis.ServerName) error {
 // Attempt to claim a particular metadata block; if already claimed, returns the original owner. if successfully
 // claimed, returns our name.
 func (e *etcdinterface) TryClaimingMetadata(blockid apis.MetadataID) (owner apis.ServerName, err error) {
-	panic("unimplemented")
+	key := fmt.Sprintf("/metadata/claims/%d", blockid)
+
+	resp, err := e.Client.Get(context.Background(), key)
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Kvs) > 0 {
+		return apis.ServerName(resp.Kvs[0].Value), nil
+	}
+
+	txn, err := e.Client.Txn(context.Background()).
+		If(clientv3.Exists(key)).
+			Then(clientv3.OpPut(key, string(e.LocalName), clientv3.WithLease(lease))).
+				Commit()
+	if err != nil {
+		return "", err
+	}
+	if !txn.Succeeded {
+
+	}
 }
 
 // Assuming that this server owns a particular block of metadata, release that metadata back out into the wild.

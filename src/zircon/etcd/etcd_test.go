@@ -126,17 +126,80 @@ func TestEtcdTesting(t *testing.T) {
 	assert.Equal(t, "hello-human", string(resp.Kvs[0].Value))
 }
 
-func TestGetName(t *testing.T) {
+func PrepareTwoClients(t *testing.T) (apis.EtcdInterface, apis.EtcdInterface, func()) {
 	sub, teardown0 := PrepareSubscribe(t)
-	defer teardown0()
-
 	iface1, teardown1 := sub("test-name")
-	defer teardown1()
 	iface2, teardown2 := sub("test-name-2")
-	defer teardown2()
+
+	return iface1, iface2, func() {
+		teardown2()
+		teardown1()
+		teardown0()
+	}
+}
+
+func TestGetName(t *testing.T) {
+	iface1, iface2, teardown := PrepareTwoClients(t)
+	defer teardown()
 
 	assert.Equal(t, "test-name", string(iface1.GetName()))
 	assert.Equal(t, "test-name-2", string(iface2.GetName()))
+}
+
+func TestGetUpdateAddress(t *testing.T) {
+	iface1, iface2, teardown := PrepareTwoClients(t)
+	defer teardown()
+
+	_, err := iface1.GetAddress(iface1.GetName())
+	assert.Error(t, err)
+	_, err = iface1.GetAddress(iface2.GetName())
+	assert.Error(t, err)
+
+	assert.NoError(t, iface2.UpdateAddress("test-address"))
+
+	resp, err := iface1.GetAddress(iface2.GetName())
+	assert.NoError(t, err)
+	assert.Equal(t, "test-address", resp)
+	resp, err = iface2.GetAddress(iface2.GetName())
+	assert.NoError(t, err)
+	assert.Equal(t, "test-address", resp)
+
+	assert.NoError(t, iface2.UpdateAddress("test-address-updated"))
+
+	resp, err = iface1.GetAddress(iface2.GetName())
+	assert.NoError(t, err)
+	assert.Equal(t, "test-address-updated", resp)
+	resp, err = iface2.GetAddress(iface2.GetName())
+	assert.NoError(t, err)
+	assert.Equal(t, "test-address-updated", resp)
+}
+
+func TestGetUpdateAddress(t *testing.T) {
+	iface1, iface2, teardown := PrepareTwoClients(t)
+	defer teardown()
+
+	_, err := iface1.GetAddress(iface1.GetName())
+	assert.Error(t, err)
+	_, err = iface1.GetAddress(iface2.GetName())
+	assert.Error(t, err)
+
+	assert.NoError(t, iface2.UpdateAddress("test-address"))
+
+	resp, err := iface1.GetAddress(iface2.GetName())
+	assert.NoError(t, err)
+	assert.Equal(t, "test-address", resp)
+	resp, err = iface2.GetAddress(iface2.GetName())
+	assert.NoError(t, err)
+	assert.Equal(t, "test-address", resp)
+
+	assert.NoError(t, iface2.UpdateAddress("test-address-updated"))
+
+	resp, err = iface1.GetAddress(iface2.GetName())
+	assert.NoError(t, err)
+	assert.Equal(t, "test-address-updated", resp)
+	resp, err = iface2.GetAddress(iface2.GetName())
+	assert.NoError(t, err)
+	assert.Equal(t, "test-address-updated", resp)
 }
 
 // TODO: additional tests and implementation required

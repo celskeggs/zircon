@@ -13,7 +13,7 @@ type EtcdInterface interface {
 	// Get the name of this server
 	GetName() ServerName
 
-	// Get the address of a particular server by name
+	// Get the address of a particular server by name, or returns an error if it doesn't exist.
 	GetAddress(name ServerName) (ServerAddress, error)
 	// Update the address of this server
 	UpdateAddress(address ServerAddress) error
