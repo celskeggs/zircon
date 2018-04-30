@@ -8,7 +8,7 @@ type Metadata struct {
 	Locations []ServerName
 }
 
-type Metadata struct {
+type MetadataEntry struct {
 	Version  Version
 	Replicas []ServerID
 }
