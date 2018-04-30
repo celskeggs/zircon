@@ -3,8 +3,8 @@ package apis
 type MetadataID uint64
 
 type Metadata struct {
-	MetaID MetadataID
-	Version Version
+	MetaID    MetadataID
+	Version   Version
 	Locations []ServerName
 }
 

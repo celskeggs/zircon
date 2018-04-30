@@ -1,11 +1,11 @@
 package test
 
 import (
+	"github.com/stretchr/testify/require"
+	"io/ioutil"
+	"os"
 	"testing"
 	"zircon/chunkserver/storage"
-	"os"
-	"io/ioutil"
-	"github.com/stretchr/testify/require"
 )
 
 func TestMemoryStorage(t *testing.T) {

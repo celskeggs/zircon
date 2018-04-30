@@ -1,13 +1,13 @@
 package rpc
 
 import (
-	"zircon/apis"
-	"zircon/rpc/twirp"
-	"net/http"
 	"context"
+	"errors"
 	"fmt"
 	"net"
-	"errors"
+	"net/http"
+	"zircon/apis"
+	"zircon/rpc/twirp"
 )
 
 // Connects to an RPC handler for a Chunkserver on a certain address.
@@ -97,9 +97,9 @@ func (p *proxyChunkserverAsTwirp) Read(context context.Context, input *twirp.Chu
 		}
 	}
 	return &twirp.Chunkserver_Read_Result{
-		Data: data,
+		Data:    data,
 		Version: uint64(version),
-		Error: message,
+		Error:   message,
 	}, nil
 }
 
@@ -129,13 +129,13 @@ func (p *proxyChunkserverAsTwirp) Delete(context context.Context, input *twirp.C
 }
 
 func (p *proxyChunkserverAsTwirp) ListAllChunks(context.Context,
-		*twirp.Nothing) (*twirp.Chunkserver_ListAllChunks_Result, error) {
+	*twirp.Nothing) (*twirp.Chunkserver_ListAllChunks_Result, error) {
 	chunks, err := p.server.ListAllChunks()
 
 	chunkVersions := make([]*twirp.ChunkVersion, len(chunks))
 	for i, chunk := range chunks {
 		chunkVersions[i] = &twirp.ChunkVersion{
-			Chunk: uint64(chunk.Chunk),
+			Chunk:   uint64(chunk.Chunk),
 			Version: uint64(chunk.Version),
 		}
 	}
@@ -150,35 +150,35 @@ type proxyTwirpAsChunkserver struct {
 }
 
 func (p *proxyTwirpAsChunkserver) StartWriteReplicated(chunk apis.ChunkNum, offset apis.Offset, data []byte,
-		replicas []apis.ServerAddress) (error) {
+	replicas []apis.ServerAddress) error {
 	addresses := make([]string, len(replicas))
 	for i, v := range replicas {
 		addresses[i] = string(v)
 	}
 	_, err := p.server.StartWriteReplicated(context.Background(), &twirp.Chunkserver_StartWriteReplicated{
-		Chunk: uint64(chunk),
-		Offset: uint32(offset),
-		Data: data,
+		Chunk:   uint64(chunk),
+		Offset:  uint32(offset),
+		Data:    data,
 		Address: addresses,
 	})
 	return err
 }
 
 func (p *proxyTwirpAsChunkserver) Replicate(chunk apis.ChunkNum, serverAddress apis.ServerAddress,
-		version apis.Version) (error) {
+	version apis.Version) error {
 	_, err := p.server.Replicate(context.Background(), &twirp.Chunkserver_Replicate{
-		Chunk: uint64(chunk),
+		Chunk:         uint64(chunk),
 		ServerAddress: string(serverAddress),
-		Version: uint64(version),
+		Version:       uint64(version),
 	})
 	return err
 }
 
 func (p *proxyTwirpAsChunkserver) Read(chunk apis.ChunkNum, offset apis.Offset, length apis.Length, minimum apis.Version) ([]byte, apis.Version, error) {
 	result, err := p.server.Read(context.Background(), &twirp.Chunkserver_Read{
-		Chunk: uint64(chunk),
-		Offset: uint32(offset),
-		Length: uint32(length),
+		Chunk:   uint64(chunk),
+		Offset:  uint32(offset),
+		Length:  uint32(length),
 		Version: uint64(minimum),
 	})
 	if err != nil {
@@ -190,20 +190,20 @@ func (p *proxyTwirpAsChunkserver) Read(chunk apis.ChunkNum, offset apis.Offset, 
 	return result.Data, apis.Version(result.Version), nil
 }
 
-func (p *proxyTwirpAsChunkserver) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data []byte) (error) {
+func (p *proxyTwirpAsChunkserver) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data []byte) error {
 	_, err := p.server.StartWrite(context.Background(), &twirp.Chunkserver_StartWrite{
-		Chunk: uint64(chunk),
+		Chunk:  uint64(chunk),
 		Offset: uint32(offset),
-		Data: data,
+		Data:   data,
 	})
 	return err
 }
 
 func (p *proxyTwirpAsChunkserver) CommitWrite(chunk apis.ChunkNum, hash apis.CommitHash, oldVersion apis.Version,
-		newVersion apis.Version) (error) {
+	newVersion apis.Version) error {
 	_, err := p.server.CommitWrite(context.Background(), &twirp.Chunkserver_CommitWrite{
-		Chunk: uint64(chunk),
-		Hash: string(hash),
+		Chunk:      uint64(chunk),
+		Hash:       string(hash),
 		OldVersion: uint64(oldVersion),
 		NewVersion: uint64(newVersion),
 	})
@@ -211,35 +211,41 @@ func (p *proxyTwirpAsChunkserver) CommitWrite(chunk apis.ChunkNum, hash apis.Com
 }
 
 func (p *proxyTwirpAsChunkserver) UpdateLatestVersion(chunk apis.ChunkNum, oldVersion apis.Version,
-		newVersion apis.Version) error {
+	newVersion apis.Version) error {
 	_, err := p.server.UpdateLatestVersion(context.Background(), &twirp.Chunkserver_UpdateLatestVersion{
-		Chunk: uint64(chunk),
+		Chunk:      uint64(chunk),
 		OldVersion: uint64(oldVersion),
 		NewVersion: uint64(newVersion),
 	})
 	return err
 }
 
-func (p *proxyTwirpAsChunkserver) Add(chunk apis.ChunkNum, initialData []byte, initialVersion apis.Version) (error) {
+func (p *proxyTwirpAsChunkserver) Add(chunk apis.ChunkNum, initialData []byte, initialVersion apis.Version) error {
 	_, err := p.server.Add(context.Background(), &twirp.Chunkserver_Add{
-		Chunk: uint64(chunk),
+		Chunk:       uint64(chunk),
 		InitialData: initialData,
-		Version: uint64(initialVersion),
+		Version:     uint64(initialVersion),
 	})
 	return err
 }
 
-func (p *proxyTwirpAsChunkserver) Delete(chunk apis.ChunkNum, version apis.Version) (error) {
+func (p *proxyTwirpAsChunkserver) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	_, err := p.server.Delete(context.Background(), &twirp.Chunkserver_Delete{
-		Chunk: uint64(chunk),
+		Chunk:   uint64(chunk),
 		Version: uint64(version),
 	})
 	return err
 }
 
-func (p *proxyTwirpAsChunkserver) ListAllChunks() ([]struct{ Chunk apis.ChunkNum; Version apis.Version }, error) {
+func (p *proxyTwirpAsChunkserver) ListAllChunks() ([]struct {
+	Chunk   apis.ChunkNum
+	Version apis.Version
+}, error) {
 	result, err := p.server.ListAllChunks(context.Background(), &twirp.Nothing{})
-	decoded := make([]struct{ Chunk apis.ChunkNum; Version apis.Version }, len(result.Chunks))
+	decoded := make([]struct {
+		Chunk   apis.ChunkNum
+		Version apis.Version
+	}, len(result.Chunks))
 	for i, v := range result.Chunks {
 		decoded[i] = struct {
 			Chunk   apis.ChunkNum

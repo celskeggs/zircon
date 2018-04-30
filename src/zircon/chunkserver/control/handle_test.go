@@ -1,10 +1,10 @@
 package control
 
 import (
+	testifyAssert "github.com/stretchr/testify/assert"
+	"testing"
 	"zircon/apis"
 	"zircon/chunkserver/storage"
-	"testing"
-	testifyAssert "github.com/stretchr/testify/assert"
 	"zircon/util"
 )
 
@@ -92,7 +92,7 @@ func TestChunkserverSingle(t *testing.T) {
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
 		assert.Equal([]struct {
-			Chunk apis.ChunkNum
+			Chunk   apis.ChunkNum
 			Version apis.Version
 		}{
 			{7, 3},
@@ -119,7 +119,7 @@ func TestChunkserverSingle(t *testing.T) {
 		data, version, err = cs.Read(7, 0, 256, 4)
 		assert.Error(err)
 		assert.Equal(apis.Version(3), version) // should still report latest version, even if it can't be provided
-		assert.Empty(data) // no data on error
+		assert.Empty(data)                     // no data on error
 	})
 
 	test("create new entry with durability", func() {
@@ -130,7 +130,7 @@ func TestChunkserverSingle(t *testing.T) {
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
 		assert.Equal([]struct {
-			Chunk apis.ChunkNum
+			Chunk   apis.ChunkNum
 			Version apis.Version
 		}{
 			{7, 3},
@@ -150,7 +150,7 @@ func TestChunkserverSingle(t *testing.T) {
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
 		assert.Equal([]struct {
-			Chunk apis.ChunkNum
+			Chunk   apis.ChunkNum
 			Version apis.Version
 		}{
 			{7, 3},
@@ -172,7 +172,7 @@ func TestChunkserverSingle(t *testing.T) {
 		data, version, err := cs.Read(7, 0, 256, apis.AnyVersion)
 		assert.Error(err)
 		assert.Equal(apis.Version(0), version) // version should be zero if none are available when the error occurs
-		assert.Empty(data) // no data on failure
+		assert.Empty(data)                     // no data on failure
 	})
 
 	test("delete entry with durability", func() {
@@ -194,7 +194,7 @@ func TestChunkserverSingle(t *testing.T) {
 		data, version, err := cs.Read(7, 0, 256, apis.AnyVersion)
 		assert.Error(err)
 		assert.Equal(apis.Version(0), version) // version should be zero if none are available when the error occurs
-		assert.Empty(data) // no data on failure
+		assert.Empty(data)                     // no data on failure
 	})
 
 	test("rewrite entry", func() {
@@ -219,7 +219,7 @@ func TestChunkserverSingle(t *testing.T) {
 		assert.True(chunks[1].Version == 3 || chunks[1].Version == 4)
 		assert.True(chunks[0].Version != chunks[1].Version)
 
-		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3 } {
+		for _, checkVer := range []apis.Version{apis.AnyVersion, 1, 2, 3} {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
 			assert.Equal(apis.Version(3), ver)
@@ -240,13 +240,13 @@ func TestChunkserverSingle(t *testing.T) {
 		chunks, err = cs.ListAllChunks()
 		assert.NoError(err)
 		assert.Equal([]struct {
-			Chunk apis.ChunkNum
+			Chunk   apis.ChunkNum
 			Version apis.Version
 		}{
 			{7, 4},
 		}, chunks)
 
-		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3, 4 } {
+		for _, checkVer := range []apis.Version{apis.AnyVersion, 1, 2, 3, 4} {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
 			assert.Equal(apis.Version(4), ver)
@@ -278,7 +278,7 @@ func TestChunkserverSingle(t *testing.T) {
 		assert.True(chunks[1].Version == 3 || chunks[1].Version == 4)
 		assert.True(chunks[0].Version != chunks[1].Version)
 
-		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3 } {
+		for _, checkVer := range []apis.Version{apis.AnyVersion, 1, 2, 3} {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
 			assert.Equal(apis.Version(3), ver)
@@ -301,13 +301,13 @@ func TestChunkserverSingle(t *testing.T) {
 		chunks, err = cs.ListAllChunks()
 		assert.NoError(err)
 		assert.Equal([]struct {
-			Chunk apis.ChunkNum
+			Chunk   apis.ChunkNum
 			Version apis.Version
 		}{
 			{7, 4},
 		}, chunks)
 
-		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3, 4 } {
+		for _, checkVer := range []apis.Version{apis.AnyVersion, 1, 2, 3, 4} {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
 			assert.Equal(apis.Version(4), ver)
@@ -317,7 +317,7 @@ func TestChunkserverSingle(t *testing.T) {
 	})
 
 	test("add data too large", func() {
-		test := make([]byte, apis.MaxChunkSize + 1)
+		test := make([]byte, apis.MaxChunkSize+1)
 		assert.Error(cs.Add(7, test, 3))
 	})
 
@@ -325,13 +325,13 @@ func TestChunkserverSingle(t *testing.T) {
 		test := make([]byte, apis.MaxChunkSize)
 		assert.NoError(cs.Add(7, test, 3))
 
-		test = make([]byte, apis.MaxChunkSize + 1)
+		test = make([]byte, apis.MaxChunkSize+1)
 		assert.Error(cs.StartWrite(7, 0, test))
 
 		test = make([]byte, apis.MaxChunkSize)
 		assert.Error(cs.StartWrite(7, 1, test))
 
-		test = make([]byte, apis.MaxChunkSize - 1)
+		test = make([]byte, apis.MaxChunkSize-1)
 		assert.NoError(cs.StartWrite(7, 1, test))
 	})
 
@@ -341,7 +341,7 @@ func TestChunkserverSingle(t *testing.T) {
 		assert.NoError(cs.CommitWrite(7, apis.CalculateCommitHash(0, []byte("Hell")), 3, 4))
 		assert.NoError(cs.Delete(7, 4))
 
-		for _, checkVer := range []apis.Version{ apis.AnyVersion, 1, 2, 3 } {
+		for _, checkVer := range []apis.Version{apis.AnyVersion, 1, 2, 3} {
 			data, ver, err := cs.Read(7, 0, 16, checkVer)
 			assert.NoError(err)
 			assert.Equal(apis.Version(3), ver)
@@ -360,7 +360,7 @@ func TestChunkserverSingle(t *testing.T) {
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
 		assert.Equal([]struct {
-			Chunk apis.ChunkNum
+			Chunk   apis.ChunkNum
 			Version apis.Version
 		}{
 			{7, 3},

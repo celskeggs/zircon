@@ -1,11 +1,11 @@
 package client
 
 import (
-	"zircon/apis"
 	"errors"
-	"zircon/rpc"
-	"zircon/frontend"
+	"zircon/apis"
 	"zircon/client/control"
+	"zircon/frontend"
+	"zircon/rpc"
 )
 
 // The configuration information provided by a client application to connect to a Zircon cluster.

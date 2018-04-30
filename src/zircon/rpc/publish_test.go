@@ -1,11 +1,11 @@
 package rpc
 
 import (
-	"testing"
+	"errors"
 	testifyAssert "github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"testing"
 	"zircon/apis"
-	"errors"
 )
 
 func beginTest(t *testing.T) (*testifyAssert.Assertions, *MockChunkserver, func(), apis.Chunkserver) {
@@ -21,7 +21,7 @@ func beginTest(t *testing.T) (*testifyAssert.Assertions, *MockChunkserver, func(
 	server, err := cache.SubscribeChunkserver(address)
 	assert.NoError(err)
 
-	return assert, mocked, func () {
+	return assert, mocked, func() {
 		mocked.AssertExpectations(t)
 
 		teardown(true)
@@ -154,7 +154,7 @@ func TestChunkserver_ListAllChunks_Pass(t *testing.T) {
 	defer teardown()
 
 	mocked.On("ListAllChunks").Return([]struct {
-		Chunk   apis.ChunkNum;
+		Chunk   apis.ChunkNum
 		Version apis.Version
 	}{
 		{81, 68}, {82, 69},
@@ -163,7 +163,7 @@ func TestChunkserver_ListAllChunks_Pass(t *testing.T) {
 	chunks, err := server.ListAllChunks()
 	assert.NoError(err)
 	assert.Equal([]struct {
-		Chunk   apis.ChunkNum;
+		Chunk   apis.ChunkNum
 		Version apis.Version
 	}{
 		{81, 68}, {82, 69},
@@ -174,7 +174,10 @@ func TestChunkserver_ListAllChunks_Fail(t *testing.T) {
 	assert, mocked, teardown, server := beginTest(t)
 	defer teardown()
 
-	mocked.On("ListAllChunks").Return([]struct{Chunk apis.ChunkNum; Version apis.Version}{},
+	mocked.On("ListAllChunks").Return([]struct {
+		Chunk   apis.ChunkNum
+		Version apis.Version
+	}{},
 		errors.New("hello world 09"))
 
 	chunks, err := server.ListAllChunks()
@@ -188,12 +191,12 @@ type MockChunkserver struct {
 	mock.Mock
 }
 
-func (o *MockChunkserver) StartWriteReplicated(chunk apis.ChunkNum, offset apis.Offset, data []byte, replicas []apis.ServerAddress) (error) {
+func (o *MockChunkserver) StartWriteReplicated(chunk apis.ChunkNum, offset apis.Offset, data []byte, replicas []apis.ServerAddress) error {
 	args := o.Called(int(chunk), int(offset), data, replicas)
 	return args.Error(0)
 }
 
-func (o *MockChunkserver) Replicate(chunk apis.ChunkNum, serverAddress apis.ServerAddress, version apis.Version) (error) {
+func (o *MockChunkserver) Replicate(chunk apis.ChunkNum, serverAddress apis.ServerAddress, version apis.Version) error {
 	args := o.Called(int(chunk), string(serverAddress), int(version))
 	return args.Error(0)
 }
@@ -203,12 +206,12 @@ func (o *MockChunkserver) Read(chunk apis.ChunkNum, offset apis.Offset, length a
 	return []byte(args.String(0)), apis.Version(args.Int(1)), args.Error(2)
 }
 
-func (o *MockChunkserver) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data []byte) (error) {
+func (o *MockChunkserver) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data []byte) error {
 	args := o.Called(int(chunk), int(offset), data)
 	return args.Error(0)
 }
 
-func (o *MockChunkserver) CommitWrite(chunk apis.ChunkNum, hash apis.CommitHash, oldVersion apis.Version, newVersion apis.Version) (error) {
+func (o *MockChunkserver) CommitWrite(chunk apis.ChunkNum, hash apis.CommitHash, oldVersion apis.Version, newVersion apis.Version) error {
 	args := o.Called(int(chunk), string(hash), int(oldVersion), int(newVersion))
 	return args.Error(0)
 }
@@ -218,17 +221,23 @@ func (o *MockChunkserver) UpdateLatestVersion(chunk apis.ChunkNum, oldVersion ap
 	return args.Error(0)
 }
 
-func (o *MockChunkserver) Add(chunk apis.ChunkNum, initialData []byte, initialVersion apis.Version) (error) {
+func (o *MockChunkserver) Add(chunk apis.ChunkNum, initialData []byte, initialVersion apis.Version) error {
 	args := o.Called(int(chunk), initialData, int(initialVersion))
 	return args.Error(0)
 }
 
-func (o *MockChunkserver) Delete(chunk apis.ChunkNum, version apis.Version) (error) {
+func (o *MockChunkserver) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	args := o.Called(int(chunk), int(version))
 	return args.Error(0)
 }
 
-func (o *MockChunkserver) ListAllChunks() ([]struct{ Chunk apis.ChunkNum; Version apis.Version }, error) {
+func (o *MockChunkserver) ListAllChunks() ([]struct {
+	Chunk   apis.ChunkNum
+	Version apis.Version
+}, error) {
 	args := o.Called()
-	return args.Get(0).([]struct{ Chunk apis.ChunkNum; Version apis.Version }), args.Error(1)
+	return args.Get(0).([]struct {
+		Chunk   apis.ChunkNum
+		Version apis.Version
+	}), args.Error(1)
 }

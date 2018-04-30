@@ -2,10 +2,13 @@ package apis
 
 // The version number of a chunk
 type Version uint64
+
 // An offset within a chunk
 type Offset uint32
+
 // A length of data within a chunk
 type Length uint32
+
 // A chunk identifier, not directly exposed to normal clients
 type ChunkNum uint64
 
@@ -22,13 +25,13 @@ type Chunkserver interface {
 	// Version of StartWrite that can also forward this data to other chunkservers, to optimize for client bandwidth.
 	// If replicas is nonempty, this will also replicate the prepared write to those servers.
 	// Additionally fails if another server fails to start a write.
-	StartWriteReplicated(chunk ChunkNum, offset Offset, data []byte, replicas []ServerAddress) (error)
+	StartWriteReplicated(chunk ChunkNum, offset Offset, data []byte, replicas []ServerAddress) error
 
 	// Tells this chunkserver to directly replicate a particular chunk to another specified chunkserver.
 	// This will use 'subref' to call 'Add' on the other chunkserver at 'serverAddress'.
 	// Replication will only take place assuming that the 'version' specified is the version stored.
 	// This will return success once the operation has completed successfully.
-	Replicate(chunk ChunkNum, serverAddress ServerAddress, version Version) (error)
+	Replicate(chunk ChunkNum, serverAddress ServerAddress, version Version) error
 }
 
 // A limited form of the chunkserver interface that doesn't include any APIs that connect to other chunkservers.
@@ -50,11 +53,11 @@ type ChunkserverSingle interface {
 	// This method does not actually perform a write.
 	// The sum of 'offset' and 'len(data)' must not be greater than MaxChunkSize.
 	// Fails if a copy of this chunk isn't located on this chunkserver.
-	StartWrite(chunk ChunkNum, offset Offset, data []byte) (error)
+	StartWrite(chunk ChunkNum, offset Offset, data []byte) error
 
 	// Commit a write -- persistently store it as the data for a particular version.
 	// Takes existing saved data for oldVersion, apply this cached write, and saved it as newVersion.
-	CommitWrite(chunk ChunkNum, hash CommitHash, oldVersion Version, newVersion Version) (error)
+	CommitWrite(chunk ChunkNum, hash CommitHash, oldVersion Version, newVersion Version) error
 
 	// Update the version of this chunk that will be returned to clients.
 	// Deletes any chunk versions older than this new version.
@@ -66,12 +69,15 @@ type ChunkserverSingle interface {
 	// Allocates a new chunk on this chunkserver.
 	// initialData will be padded with zeroes up to the MaxChunkSize
 	// initialVersion must be positive
-	Add(chunk ChunkNum, initialData []byte, initialVersion Version) (error)
+	Add(chunk ChunkNum, initialData []byte, initialVersion Version) error
 
 	// Deletes a chunk stored on this chunkserver with a specific version.
-	Delete(chunk ChunkNum, version Version) (error)
+	Delete(chunk ChunkNum, version Version) error
 
 	// Requests a list of all chunks currently held by this chunkserver.
 	// There is no guaranteed order for the returned slice.
-	ListAllChunks() ([]struct{ Chunk ChunkNum; Version Version }, error)
+	ListAllChunks() ([]struct {
+		Chunk   ChunkNum
+		Version Version
+	}, error)
 }

@@ -1,12 +1,12 @@
 package rpc
 
 import (
-	"zircon/apis"
 	"net/http"
+	"zircon/apis"
 )
 
 // Connects to an RPC handler for a Frontend on a certain address.
-func UncachedSubscribeFrontend(address apis.ServerAddress,  client *http.Client) (apis.Frontend, error) {
+func UncachedSubscribeFrontend(address apis.ServerAddress, client *http.Client) (apis.Frontend, error) {
 	panic("unimplemented")
 }
 

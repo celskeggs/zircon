@@ -1,11 +1,11 @@
 package test
 
 import (
-	"zircon/chunkserver/storage"
-	"testing"
 	testifyAssert "github.com/stretchr/testify/assert"
-	"zircon/apis"
 	"sort"
+	"testing"
+	"zircon/apis"
+	"zircon/chunkserver/storage"
 	"zircon/util"
 )
 
@@ -17,7 +17,7 @@ func sortChunkNums(chunks []apis.ChunkNum) {
 
 // just for the chunk part, not for the version part
 func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func(storage.ChunkStorage),
-					  resetStorage func(), t *testing.T) {
+	resetStorage func(), t *testing.T) {
 	assert := testifyAssert.New(t)
 
 	var s storage.ChunkStorage = nil
@@ -227,20 +227,20 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 	test("write maximum length chunk with nonzero element", func() {
 		write := make([]byte, apis.MaxChunkSize)
-		write[len(write) - 1] = 152
+		write[len(write)-1] = 152
 		assert.NoError(s.WriteVersion(70, 100, write))
 
 		data, err := s.ReadVersion(70, 100)
 		assert.NoError(err)
 		assert.Equal(apis.MaxChunkSize, apis.Length(len(data)))
-		assert.Equal(uint8(152), data[len(data) - 1])
-		data[len(data) - 1] = 0
-		assert.Equal(uint8(152), write[len(write) - 1])
+		assert.Equal(uint8(152), data[len(data)-1])
+		data[len(data)-1] = 0
+		assert.Equal(uint8(152), write[len(write)-1])
 		assert.Empty(util.StripTrailingZeroes(data))
 	})
 
 	test("write too large chunk", func() {
-		data := make([]byte, apis.MaxChunkSize + 1)
+		data := make([]byte, apis.MaxChunkSize+1)
 		assert.Error(s.WriteVersion(70, 100, data))
 
 		versions, err := s.ListVersions(70)

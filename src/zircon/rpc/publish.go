@@ -1,12 +1,12 @@
 package rpc
 
 import (
-	"zircon/apis"
-	"sync"
 	"errors"
-	"net/http"
-	"time"
 	"net"
+	"net/http"
+	"sync"
+	"time"
+	"zircon/apis"
 )
 
 type ConnectionCache interface {
@@ -31,7 +31,7 @@ type conncache struct {
 	closed       bool
 }
 
-func NewConnectionCache() (ConnectionCache) {
+func NewConnectionCache() ConnectionCache {
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout:   5 * time.Second,
@@ -44,14 +44,14 @@ func NewConnectionCache() (ConnectionCache) {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 	client := &http.Client{
-		Timeout: time.Second,
+		Timeout:   time.Second,
 		Transport: transport,
 	}
 	return &conncache{
-		client: client,
-		transport: transport,
+		client:       client,
+		transport:    transport,
 		chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
-		frontends: map[apis.ServerAddress]apis.Frontend{},
+		frontends:    map[apis.ServerAddress]apis.Frontend{},
 	}
 }
 

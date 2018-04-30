@@ -1,11 +1,11 @@
 package control
 
 import (
-	"zircon/chunkserver/storage"
-	"zircon/apis"
-	"sync"
-	"fmt"
 	"errors"
+	"fmt"
+	"sync"
+	"zircon/apis"
+	"zircon/chunkserver/storage"
 )
 
 // a nullary function to tear down any internal state of a ChunkserverSingle instance
@@ -28,7 +28,7 @@ type chunkserver struct {
 func ExposeChunkserver(storage storage.ChunkStorage) (apis.ChunkserverSingle, Teardown, error) {
 	cs := &chunkserver{
 		Storage: storage,
-		Hashes: map[apis.CommitHash]commit{},
+		Hashes:  map[apis.CommitHash]commit{},
 	}
 	// TODO: RECOVERY PROCESS
 	return cs, cs.Teardown, nil
@@ -53,11 +53,17 @@ func checkInvariantSameChunks(a []apis.ChunkNum, b []apis.ChunkNum) {
 	}
 }
 
-func (cs *chunkserver) ListAllChunks() ([]struct{ Chunk apis.ChunkNum; Version apis.Version }, error) {
+func (cs *chunkserver) ListAllChunks() ([]struct {
+	Chunk   apis.ChunkNum
+	Version apis.Version
+}, error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	var result []struct {Chunk apis.ChunkNum; Version apis.Version}
+	var result []struct {
+		Chunk   apis.ChunkNum
+		Version apis.Version
+	}
 	latestChunks, err := cs.Storage.ListChunksWithLatest()
 	if err != nil {
 		return nil, err
@@ -183,7 +189,7 @@ func (cs *chunkserver) Read(chunk apis.ChunkNum, offset apis.Offset, length apis
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	if apis.Length(offset) + length > apis.MaxChunkSize {
+	if apis.Length(offset)+length > apis.MaxChunkSize {
 		return nil, 0, errors.New("too much data")
 	}
 
@@ -222,7 +228,7 @@ func (cs *chunkserver) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data 
 		return err
 	}
 
-	if int(offset) + len(data) > int(apis.MaxChunkSize) {
+	if int(offset)+len(data) > int(apis.MaxChunkSize) {
 		return errors.New("too much data to write")
 	}
 

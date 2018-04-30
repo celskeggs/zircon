@@ -1,18 +1,18 @@
 package etcd
 
 import (
-	"os"
-	"github.com/coreos/etcd/embed"
-	"io/ioutil"
-	"net/url"
-	"testing"
-	"github.com/coreos/etcd/clientv3"
 	"context"
-	"github.com/stretchr/testify/assert"
-	"zircon/apis"
-	"github.com/stretchr/testify/require"
-	"math/rand"
 	"fmt"
+	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/embed"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"io/ioutil"
+	"math/rand"
+	"net/url"
+	"os"
+	"testing"
+	"zircon/apis"
 )
 
 func newConfig(dirname string, serverURL string, advertiseURL string) (*embed.Config, error) {
@@ -90,16 +90,16 @@ func PrepareSubscribe(t *testing.T) (subscribe func(local apis.ServerName) (apis
 	servers := []apis.ServerAddress{apis.ServerAddress(server)}
 
 	return func(local apis.ServerName) (apis.EtcdInterface, func()) {
-		iface, err := SubscribeEtcd(local, servers)
-		require.NoError(t, err)
-		return iface, func() {
-			err := iface.Close()
+			iface, err := SubscribeEtcd(local, servers)
+			require.NoError(t, err)
+			return iface, func() {
+				err := iface.Close()
+				require.NoError(t, err)
+			}
+		}, func() {
+			err := abort()
 			require.NoError(t, err)
 		}
-	}, func() {
-		err := abort()
-		require.NoError(t, err)
-	}
 }
 
 // Just to make sure that our mechanism of launching etcd actually works.

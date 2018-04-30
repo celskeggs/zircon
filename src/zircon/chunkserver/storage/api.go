@@ -25,7 +25,6 @@ type ChunkStorage interface {
 	// Delete an existing version of a chunk.
 	DeleteVersion(chunk apis.ChunkNum, version apis.Version) error
 
-
 	// *** part 2: versions ***
 
 	// List chunks for which we've stored a latest version.

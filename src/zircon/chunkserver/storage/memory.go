@@ -1,15 +1,15 @@
 package storage
 
 import (
-	"zircon/apis"
-	"sort"
 	"fmt"
+	"sort"
+	"zircon/apis"
 )
 
 type MemoryStorage struct {
 	isClosed bool
-	chunks map[apis.ChunkNum]map[apis.Version][]byte
-	latest map[apis.ChunkNum]apis.Version
+	chunks   map[apis.ChunkNum]map[apis.Version][]byte
+	latest   map[apis.ChunkNum]apis.Version
 }
 
 // Creates an in-memory-only location to store data, and construct an interface by which a chunkserver can store chunks

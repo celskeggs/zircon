@@ -1,8 +1,8 @@
 package frontend
 
 import (
-	"zircon/apis"
 	"sync"
+	"zircon/apis"
 )
 
 type roundrobin struct {

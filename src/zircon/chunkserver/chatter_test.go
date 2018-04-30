@@ -1,11 +1,11 @@
 package chunkserver
 
 import (
-	"testing"
 	testifyAssert "github.com/stretchr/testify/assert"
-	"zircon/chunkserver/control"
-	"zircon/apis"
 	"github.com/stretchr/testify/require"
+	"testing"
+	"zircon/apis"
+	"zircon/chunkserver/control"
 	"zircon/chunkserver/storage"
 	"zircon/rpc"
 	"zircon/util"

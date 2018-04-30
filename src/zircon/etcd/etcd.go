@@ -1,8 +1,8 @@
 package etcd
 
 import (
-	"zircon/apis"
 	"github.com/coreos/etcd/clientv3"
+	"zircon/apis"
 )
 
 type etcdinterface struct {
@@ -22,7 +22,7 @@ func SubscribeEtcd(localName apis.ServerName, servers []apis.ServerAddress) (api
 	}
 	return &etcdinterface{
 		LocalName: localName,
-		Client: client,
+		Client:    client,
 	}, nil
 }
 

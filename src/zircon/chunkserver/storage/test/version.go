@@ -1,15 +1,15 @@
 package test
 
 import (
-	"zircon/chunkserver/storage"
-	"testing"
 	testifyAssert "github.com/stretchr/testify/assert"
+	"testing"
 	"zircon/apis"
+	"zircon/chunkserver/storage"
 )
 
 // just for the chunk part, not for the version part
 func TestVersionStorage(openStorage func() storage.ChunkStorage, closeStorage func(storage.ChunkStorage),
-	 					resetStorage func(), t *testing.T) {
+	resetStorage func(), t *testing.T) {
 	assert := testifyAssert.New(t)
 
 	var s storage.ChunkStorage = nil

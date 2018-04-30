@@ -1,19 +1,19 @@
 package main
 
 import (
-	"os"
 	"fmt"
 	"gopkg.in/yaml.v2"
+	"os"
 	"zircon/chunkserver"
-	"zircon/rpc"
 	"zircon/chunkserver/control"
 	"zircon/chunkserver/storage"
 	"zircon/client"
 	"zircon/client/demo"
+	"zircon/rpc"
 )
 
 type Config struct {
-	Address string
+	Address     string
 	StorageType string
 	StoragePath string
 
