@@ -1,5 +1,7 @@
 package apis
 
+import "time"
+
 // The name of a server
 type ServerName string
 
@@ -15,22 +17,29 @@ type EtcdInterface interface {
 
 	// Get the address of a particular server by name, or returns an error if it doesn't exist.
 	GetAddress(name ServerName) (ServerAddress, error)
-	// Update the address of this server
+	// Update the address of this server, and assigns an ID if necessary.
 	UpdateAddress(address ServerAddress) error
 	// Get the name corresponding to a ServerID
 	GetNameByID(id ServerID) (ServerName, error)
+	// Get the ServerID corresponding to a name
+	GetIDByName(name ServerName) (ServerID, error)
 
+	// Prepares this interface to accept claims for metadata
+	BeginMetadataLease() error
+	// Gets the metadata lease timeout for this configuration.
+	GetMetadataLeaseTimeout() time.Duration
 	// Attempt to claim a particular metadata block; if already claimed, returns the original owner. if successfully
 	// claimed, returns our name.
 	TryClaimingMetadata(blockid MetadataID) (owner ServerName, err error)
 	// Assuming that this server owns a particular block of metadata, release that metadata back out into the wild.
 	DisclaimMetadata(blockid MetadataID) error
-	// Get metadata; only allowed if this server has a current claim on the block
-	GetMetadata(blockid MetadataID) (Metadata, error)
-	// Update metadata; only allowed if this server has a current claim on the block
-	UpdateMetadata(blockid MetadataID, data Metadata) error
 	// Renew the claim on all metadata blocks
 	RenewMetadataClaims() error
+
+	// Get metametadata for a metadata block; only allowed if this server has a current claim on the block
+	GetMetametadata(blockid MetadataID) (Metametadata, error)
+	// Update metametadata for a metadata block; only allowed if this server has a current claim on the block
+	UpdateMetametadata(blockid MetadataID, data Metametadata) error
 
 	// tear down this connection
 	Close() error
