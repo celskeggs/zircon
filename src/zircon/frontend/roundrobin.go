@@ -27,8 +27,8 @@ func (r *roundrobin) next() apis.Frontend {
 	return server
 }
 
-func (r *roundrobin) ReadMetadata(chunk apis.ChunkNum) (apis.Version, []apis.ServerAddress, error) {
-	return r.next().ReadMetadata(chunk)
+func (r *roundrobin) ReadMetadataEntry(chunk apis.ChunkNum) (apis.Version, []apis.ServerAddress, error) {
+	return r.next().ReadMetadataEntry(chunk)
 }
 
 func (r *roundrobin) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash apis.CommitHash) (apis.Version, error) {

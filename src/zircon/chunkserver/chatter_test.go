@@ -9,29 +9,17 @@ import (
 	"zircon/chunkserver/storage"
 	"zircon/rpc"
 	"zircon/util"
+	"zircon/chunkserver/test"
 )
-
-func newTestCS(t *testing.T, cache rpc.ConnectionCache) (apis.Chunkserver, control.Teardown) {
-	mem, err := storage.ConfigureMemoryStorage()
-	require.NoError(t, err)
-	single, teardown, err := control.ExposeChunkserver(mem)
-	require.NoError(t, err)
-	server, err := WithChatter(single, cache)
-	require.NoError(t, err)
-	return server, func() {
-		teardown()
-		mem.Close()
-	}
-}
 
 func TestChatterReplicate(t *testing.T) {
 	assert := testifyAssert.New(t)
 
 	cache := rpc.NewConnectionCache()
 
-	main, mainT := newTestCS(t, cache)
+	main, mainT := test.NewTestChunkserver(t, cache)
 	defer mainT()
-	alt, altT := newTestCS(t, cache)
+	alt, altT := test.NewTestChunkserver(t, cache)
 	defer altT()
 
 	teardown, address, err := rpc.PublishChunkserver(alt, ":0")
@@ -56,11 +44,11 @@ func TestChatterStartReplicated(t *testing.T) {
 
 	cache := rpc.NewConnectionCache()
 
-	main, mainT := newTestCS(t, cache)
+	main, mainT := test.NewTestChunkserver(t, cache)
 	defer mainT()
-	alt1, alt1T := newTestCS(t, cache)
+	alt1, alt1T := test.NewTestChunkserver(t, cache)
 	defer alt1T()
-	alt2, alt2T := newTestCS(t, cache)
+	alt2, alt2T := test.NewTestChunkserver(t, cache)
 	defer alt2T()
 
 	teardown1, address1, err := rpc.PublishChunkserver(alt1, ":0")
