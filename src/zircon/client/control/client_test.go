@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"math/rand"
 	"time"
+	"github.com/stretchr/testify/require"
 )
 
 // Prepares three chunkservers (cs0-cs2) and one frontend server (fe0)
@@ -47,7 +48,7 @@ func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats test
 func PrepareSimpleClient(t *testing.T) (apis.Client, func()) {
 	cache, _, fe, teardown := PrepareLocalCluster(t)
 	client, err := ConstructClient(fe, cache)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	return client, func() {
 		client.Close()
 		teardown()
@@ -146,7 +147,7 @@ func TestConflictingClients(t *testing.T) {
 
 	func () {
 		setupClient, err := ConstructClient(fe, cache)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		defer setupClient.Close()
 		chunk, err = setupClient.New()
 		assert.NoError(t, err)
@@ -249,7 +250,7 @@ func TestParallelClients(t *testing.T) {
 			}()
 
 			client, err := ConstructClient(fe, cache)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer client.Close()
 
 			chunk, err := client.New()
@@ -308,7 +309,7 @@ func TestDeletion(t *testing.T) {
 	defer teardown()
 
 	client, err := ConstructClient(fe, cache)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer client.Close()
 
 	// perform one creation and deletion so that any metadata needed is allocated
@@ -365,7 +366,7 @@ func TestCleanup(t *testing.T) {
 	defer teardown()
 
 	client, err := ConstructClient(fe, cache)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer client.Close()
 
 	chunk, err := client.New()
@@ -413,7 +414,7 @@ func TestIncompleteRemoval(t *testing.T) {
 	// perform one creation and deletion so that any metadata needed is allocated
 	func () {
 		client, err := ConstructClient(fe, cache)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		defer client.Close()
 
 		chunk, err := client.New()
