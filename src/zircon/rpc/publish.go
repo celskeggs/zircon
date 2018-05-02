@@ -19,6 +19,8 @@ type ConnectionCache interface {
 	// Failure to connect does *not* cause an error here; just timeouts when trying to call specific methods.
 	SubscribeFrontend(address apis.ServerAddress) (apis.Frontend, error)
 
+	// Closes as many open connections as possible. May disrupt current operations. Should not be necessary to call if
+	// no subscriptions have been attempted.
 	CloseAll()
 }
 
