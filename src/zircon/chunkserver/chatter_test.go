@@ -2,11 +2,8 @@ package chunkserver
 
 import (
 	testifyAssert "github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"zircon/apis"
-	"zircon/chunkserver/control"
-	"zircon/chunkserver/storage"
 	"zircon/rpc"
 	"zircon/util"
 	"zircon/chunkserver/test"
@@ -17,9 +14,9 @@ func TestChatterReplicate(t *testing.T) {
 
 	cache := rpc.NewConnectionCache()
 
-	main, mainT := test.NewTestChunkserver(t, cache)
+	main, _, mainT := test.NewTestChunkserver(t, cache)
 	defer mainT()
-	alt, altT := test.NewTestChunkserver(t, cache)
+	alt, _, altT := test.NewTestChunkserver(t, cache)
 	defer altT()
 
 	teardown, address, err := rpc.PublishChunkserver(alt, ":0")
@@ -44,11 +41,11 @@ func TestChatterStartReplicated(t *testing.T) {
 
 	cache := rpc.NewConnectionCache()
 
-	main, mainT := test.NewTestChunkserver(t, cache)
+	main, _, mainT := test.NewTestChunkserver(t, cache)
 	defer mainT()
-	alt1, alt1T := test.NewTestChunkserver(t, cache)
+	alt1, _, alt1T := test.NewTestChunkserver(t, cache)
 	defer alt1T()
-	alt2, alt2T := test.NewTestChunkserver(t, cache)
+	alt2, _, alt2T := test.NewTestChunkserver(t, cache)
 	defer alt2T()
 
 	teardown1, address1, err := rpc.PublishChunkserver(alt1, ":0")

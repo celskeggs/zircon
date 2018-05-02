@@ -16,23 +16,26 @@ import (
 )
 
 // Prepares three chunkservers (cs0-cs2) and one frontend server (fe0)
-func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, fe apis.Frontend, teardown func()) {
+func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats test.StorageStats, fe apis.Frontend, teardown func()) {
 	cache := &MockCache {
 		Frontends: map[apis.ServerAddress]apis.Frontend{},
 	}
-	cs0, teardown1 := test.NewTestChunkserver(t, cache)
-	cs1, teardown2 := test.NewTestChunkserver(t, cache)
-	cs2, teardown3 := test.NewTestChunkserver(t, cache)
+	cs0, stats1, teardown1 := test.NewTestChunkserver(t, cache)
+	cs1, stats2, teardown2 := test.NewTestChunkserver(t, cache)
+	cs2, stats3, teardown3 := test.NewTestChunkserver(t, cache)
 	cache.Chunkservers = map[apis.ServerAddress]apis.Chunkserver {
 		"cs0": cs0,
 		"cs1": cs1,
 		"cs2": cs2,
 	}
-	etcds, teardown4 := etcd.PrepareSubscribe(t)
+	etcds, teardown4 := etcd.PrepareSubscribeForTesting(t)
 	etcd0, teardown5 := etcds("fe0")
 	fe, err := frontend.ConstructFrontendOnNetwork("fe0", etcd0, cache)
 	assert.NoError(t, err)
-	return cache, fe, func() {
+	return cache, func() int {
+		// TODO: include partial metadata usage in these stats?
+		return stats1() + stats2() + stats3()
+	}, fe, func() {
 		teardown5()
 		teardown4()
 		teardown3()
@@ -42,7 +45,7 @@ func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, fe apis.Fr
 }
 
 func PrepareSimpleClient(t *testing.T) (apis.Client, func()) {
-	cache, fe, teardown := PrepareLocalCluster(t)
+	cache, _, fe, teardown := PrepareLocalCluster(t)
 	client, err := ConstructClient(fe, cache)
 	assert.NoError(t, err)
 	return client, func() {
@@ -136,7 +139,7 @@ func TestMaxSizeChecking(t *testing.T) {
 
 // Tests the ability for multiple clients to safely clobber each others' changes to a shared block of data.
 func TestConflictingClients(t *testing.T) {
-	cache, fe, teardown := PrepareLocalCluster(t)
+	cache, _, fe, teardown := PrepareLocalCluster(t)
 	defer teardown()
 
 	var chunk apis.ChunkNum
@@ -164,7 +167,7 @@ func TestConflictingClients(t *testing.T) {
 				if ok {
 					complete <- struct {subtotal int;count int}{subtotal, subcount}
 				} else {
-					complete <- struct {subtotal int;count int}{0, 0}
+					complete <- struct {subtotal int;count int}{0, -1}
 				}
 			}()
 
@@ -226,23 +229,255 @@ func TestConflictingClients(t *testing.T) {
 
 // Tests the ability of many parallel clients to independently perform lots of operations on their own blocks.
 func TestParallelClients(t *testing.T) {
-	panic("TODO")
+	cache, _, fe, teardown := PrepareLocalCluster(t)
+	defer teardown()
+
+	complete := make(chan int)
+	count := 10
+
+	finishAt := time.Now().Add(time.Second)
+	for i := 0; i < count; i++ {
+		go func(clientId int) {
+			operations := 0
+			ok := false
+			defer func() {
+				if ok {
+					complete <- operations
+				} else {
+					complete <- -1
+				}
+			}()
+
+			client, err := ConstructClient(fe, cache)
+			assert.NoError(t, err)
+			defer client.Close()
+
+			chunk, err := client.New()
+			assert.NoError(t, err)
+
+			lastVer, err := client.Write(chunk, 0, apis.AnyVersion, []byte("0"))
+			assert.NoError(t, err)
+			assert.True(t, lastVer > 0)
+
+			total := 0
+
+			for time.Now().Before(finishAt) {
+				nextAddition := rand.Intn(10000) - 100
+				total += nextAddition
+
+				num, ver, err := client.Read(chunk, 0, 128)
+				assert.NoError(t, err)
+				assert.Equal(t, lastVer, ver)
+				numnum, err := strconv.Atoi(string(util.StripTrailingZeroes(num)))
+				newValue := nextAddition + numnum
+
+				newData := make([]byte, 128)
+				copy(newData, []byte(strconv.Itoa(newValue)))
+				newver, err := client.Write(chunk, 0, ver, newData)
+				assert.NoError(t, err)
+				assert.True(t, newver > ver)
+
+				lastVer = newver
+
+				operations++
+			}
+
+			num, ver, err := client.Read(chunk, 0, 128)
+			assert.NoError(t, err)
+			assert.Equal(t, lastVer, ver)
+			numnum, err := strconv.Atoi(string(util.StripTrailingZeroes(num)))
+
+			assert.Equal(t, total, numnum)
+
+			ok = true
+		}(i)
+	}
+
+	ops := 0
+	for i := 0; i < count; i++ {
+		opsSingle := <-complete
+		assert.True(t, opsSingle >= 50, "not enough requests processed: %d/50", opsSingle)
+		ops += opsSingle
+	}
+	assert.True(t, ops >= 1000, "not enough requests processed: %d/1000", ops)
 }
 
 // Tests the ability for deleted chunks to be fully cleaned up
 func TestDeletion(t *testing.T) {
-	t.Fatal("unimplemented: additional tests")
+	cache, usage, fe, teardown := PrepareLocalCluster(t)
+	defer teardown()
+
+	client, err := ConstructClient(fe, cache)
+	assert.NoError(t, err)
+	defer client.Close()
+
+	// perform one creation and deletion so that any metadata needed is allocated
+
+	chunk, err := client.New()
+	assert.NoError(t, err)
+
+	ver, err := client.Write(chunk, 0, apis.AnyVersion, []byte("hello"))
+	assert.NoError(t, err)
+
+	assert.NoError(t, client.Delete(chunk, ver))
+
+	// now we sample the data usage, and launch into a whole bunch of creation and deletion
+
+	initial := usage()
+
+	pass := make(chan bool)
+	count := 50
+
+	for i := 0; i < count; i++ {
+		go func() {
+			ok := false
+			defer func() {
+				pass <- ok
+			}()
+
+			for j := 0; j < 50; j++ {
+				chunk, err := client.New()
+				assert.NoError(t, err)
+
+				ver, err := client.Write(chunk, 0, apis.AnyVersion, []byte("hello"))
+				assert.NoError(t, err)
+
+				assert.NoError(t, client.Delete(chunk, ver))
+			}
+
+			ok = true
+		}()
+	}
+
+	for i := 0; i < count; i++ {
+		assert.True(t, <-pass)
+	}
+
+	// and after all of that is done, we shouldn't be using any more storage space
+
+	final := usage()
+	assert.Equal(t, initial, final)
+}
+
+// Tests the ability of old versions of chunks to be fully cleaned up
+func TestCleanup(t *testing.T) {
+	cache, usage, fe, teardown := PrepareLocalCluster(t)
+	defer teardown()
+
+	client, err := ConstructClient(fe, cache)
+	assert.NoError(t, err)
+	defer client.Close()
+
+	chunk, err := client.New()
+	assert.NoError(t, err)
+
+	ver, err := client.Write(chunk, 0, apis.AnyVersion, []byte("begin;"))
+	offset := apis.Offset(len("begin;"))
+	assert.NoError(t, err)
+
+	initial := usage()
+
+	for i := 0; i < 100; i++ {
+		entry := fmt.Sprintf("entry %d;", i)
+		newver, err := client.Write(chunk, offset, ver, []byte(entry))
+		assert.NoError(t, err)
+		offset += apis.Offset(len(entry))
+		ver = newver
+	}
+
+	final := usage()
+
+	assert.Equal(t, initial, final)
+
+	// some extra checks that the data was all written and read back correctly
+
+	data, version, err := client.Read(chunk, offset, 1000)
+	assert.NoError(t, err)
+	assert.Equal(t, ver, version)
+	assert.Equal(t, "begin;", string(data[:6]))
+	data = data[6:]
+	for i := 0; i < 100; i++ {
+		expected := fmt.Sprintf("entry %d;", i)
+		assert.Equal(t, expected, string(data[:len(expected)]))
+		data = data[len(expected):]
+	}
+	assert.Empty(t, util.StripTrailingZeroes(data))
 }
 
 // Tests the ability of a series of clients to invoke New() and then close their connections, and have all of the extra
 // new chunks be safely cleaned up.
 func TestIncompleteRemoval(t *testing.T) {
-	t.Fatal("unimplemented: additional tests")
-}
+	cache, usage, fe, teardown := PrepareLocalCluster(t)
+	defer teardown()
 
-// Tests that linearizability applies to a large mess of operations
-func TestLinearizable(t *testing.T) {
-	t.Fatal("unimplemented: additional tests")
+	// perform one creation and deletion so that any metadata needed is allocated
+	func () {
+		client, err := ConstructClient(fe, cache)
+		assert.NoError(t, err)
+		defer client.Close()
+
+		chunk, err := client.New()
+		assert.NoError(t, err)
+
+		ver, err := client.Write(chunk, 0, apis.AnyVersion, []byte("hello"))
+		assert.NoError(t, err)
+
+		assert.NoError(t, client.Delete(chunk, ver))
+	}()
+
+	count := 100
+	initial := usage()
+	chunknums := make(chan apis.ChunkNum, 100)
+	done := make(chan bool)
+
+	go func() {
+		ok := false
+		defer func() {
+			done <- ok
+		}()
+		everything := map[apis.ChunkNum]bool{}
+		duplicate := false
+		for chunknum := range chunknums {
+			if everything[chunknum] {
+				duplicate = true
+			}
+			everything[chunknum] = true
+		}
+		// must have been at least one duplicate, which signifies reuse of chunk numbers... which we want!
+		assert.True(t, duplicate)
+		ok = true
+	}()
+
+	for i := 0; i < count; i++ {
+		go func() {
+			ok := false
+			defer func() {
+				done <- ok
+			}()
+
+			client, err := ConstructClient(fe, cache)
+			assert.NoError(t, err)
+			defer client.Close()
+
+			for j := 0; j < 50; j++ {
+				chunk, err := client.New()
+				assert.NoError(t, err)
+				chunknums <- chunk
+			}
+			ok = true
+		}()
+	}
+
+	for i := 0; i < count; i++ {
+		assert.True(t, <-done)
+	}
+
+	close(chunknums)
+
+	assert.True(t, <-done)
+
+	// all of the clients have been closed, so we should be back to the original data usage
+	assert.Equal(t, initial, usage())
 }
 
 type MockCache struct {

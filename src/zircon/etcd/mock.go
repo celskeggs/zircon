@@ -83,7 +83,7 @@ func LaunchTestingEtcdServer() (string, func() error, error) {
 	return clientURL, abort, nil
 }
 
-func PrepareSubscribe(t *testing.T) (subscribe func(local apis.ServerName) (apis.EtcdInterface, func()), teardown func()) {
+func PrepareSubscribeForTesting(t *testing.T) (subscribe func(local apis.ServerName) (apis.EtcdInterface, func()), teardown func()) {
 	server, abort, err := LaunchTestingEtcdServer()
 	require.NoError(t, err)
 

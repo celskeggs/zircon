@@ -34,7 +34,7 @@ func TestEtcdTesting(t *testing.T) {
 }
 
 func PrepareTwoClients(t *testing.T) (apis.EtcdInterface, apis.EtcdInterface, func()) {
-	sub, teardown0 := PrepareSubscribe(t)
+	sub, teardown0 := PrepareSubscribeForTesting(t)
 	iface1, teardown1 := sub("test-name")
 	iface2, teardown2 := sub("test-name-2")
 
