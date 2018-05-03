@@ -6,7 +6,6 @@ import (
 	"zircon/rpc"
 	"github.com/stretchr/testify/assert"
 	"fmt"
-	"zircon/chunkserver/test"
 	"zircon/frontend"
 	"zircon/etcd"
 	"zircon/util"
@@ -14,16 +13,17 @@ import (
 	"math/rand"
 	"time"
 	"github.com/stretchr/testify/require"
+	"zircon/chunkserver"
 )
 
 // Prepares three chunkservers (cs0-cs2) and one frontend server (fe0)
-func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats test.StorageStats, fe apis.Frontend, teardown func()) {
-	cache := &MockCache {
+func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats chunkserver.StorageStats, fe apis.Frontend, teardown func()) {
+	cache := &rpc.MockCache {
 		Frontends: map[apis.ServerAddress]apis.Frontend{},
 	}
-	cs0, stats1, teardown1 := test.NewTestChunkserver(t, cache)
-	cs1, stats2, teardown2 := test.NewTestChunkserver(t, cache)
-	cs2, stats3, teardown3 := test.NewTestChunkserver(t, cache)
+	cs0, stats1, teardown1 := chunkserver.NewTestChunkserver(t, cache)
+	cs1, stats2, teardown2 := chunkserver.NewTestChunkserver(t, cache)
+	cs2, stats3, teardown3 := chunkserver.NewTestChunkserver(t, cache)
 	cache.Chunkservers = map[apis.ServerAddress]apis.Chunkserver {
 		"cs0": cs0,
 		"cs1": cs1,
@@ -31,7 +31,7 @@ func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats test
 	}
 	etcds, teardown4 := etcd.PrepareSubscribeForTesting(t)
 	etcd0, teardown5 := etcds("fe0")
-	fe, err := frontend.ConstructFrontendOnNetwork("fe0", etcd0, cache)
+	fe, err := frontend.ConstructFrontendOnNetwork(etcd0, cache)
 	assert.NoError(t, err)
 	return cache, func() int {
 		// TODO: include partial metadata usage in these stats?
@@ -479,31 +479,4 @@ func TestIncompleteRemoval(t *testing.T) {
 
 	// all of the clients have been closed, so we should be back to the original data usage
 	assert.Equal(t, initial, usage())
-}
-
-type MockCache struct {
-	Frontends    map[apis.ServerAddress]apis.Frontend
-	Chunkservers map[apis.ServerAddress]apis.Chunkserver
-}
-
-func (mc *MockCache) SubscribeChunkserver(address apis.ServerAddress) (apis.Chunkserver, error) {
-	cs, found := mc.Chunkservers[address]
-	if found {
-		return cs, nil
-	} else {
-		return nil, fmt.Errorf("no such chunkserver: %s", address)
-	}
-}
-
-func (mc *MockCache) SubscribeFrontend(address apis.ServerAddress) (apis.Frontend, error) {
-	fe, found := mc.Frontends[address]
-	if found {
-		return fe, nil
-	} else {
-		return nil, fmt.Errorf("no such frontend: %s", address)
-	}
-}
-
-func (mc *MockCache) CloseAll() {
-	// don't bother doing anything
 }

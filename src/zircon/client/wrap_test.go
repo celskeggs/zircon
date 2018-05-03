@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"zircon/util"
 	"zircon/rpc"
-	"zircon/chunkserver/test"
+	"zircon/chunkserver"
 	"zircon/etcd"
 )
 
@@ -33,9 +33,9 @@ func (m *MultiTeardown) Add(teardowns ...func()) {
 func PrepareNetworkedCluster(t *testing.T) (fe apis.Client, teardown func()) {
 	cache := rpc.NewConnectionCache()
 	teardowns := &MultiTeardown{}
-	cs0, _, teardown1 := test.NewTestChunkserver(t, cache)
-	cs1, _, teardown2 := test.NewTestChunkserver(t, cache)
-	cs2, _, teardown3 := test.NewTestChunkserver(t, cache)
+	cs0, _, teardown1 := chunkserver.NewTestChunkserver(t, cache)
+	cs1, _, teardown2 := chunkserver.NewTestChunkserver(t, cache)
+	cs2, _, teardown3 := chunkserver.NewTestChunkserver(t, cache)
 	teardowns.Add(teardown1, teardown2, teardown3)
 	teardown4, cs0addr, err := rpc.PublishChunkserver(cs0, "127.0.0.1:0")
 	assert.NoError(t, err)
