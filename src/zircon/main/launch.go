@@ -10,10 +10,11 @@ import (
 	"zircon/client"
 	"zircon/client/demo"
 	"zircon/rpc"
+	"zircon/apis"
 )
 
 type Config struct {
-	Address     string
+	Address     apis.ServerAddress
 	StorageType string
 	StoragePath string
 
@@ -85,7 +86,7 @@ func LaunchDemoClient(config *Config) error {
 	conncache := rpc.NewConnectionCache()
 	defer conncache.CloseAll()
 
-	clientConnection, err := client.ConfigureClient(&config.ClientConfig, conncache)
+	clientConnection, err := client.ConfigureClient(config.ClientConfig, conncache)
 	if err != nil {
 		return err
 	}
