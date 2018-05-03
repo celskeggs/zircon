@@ -1,11 +1,10 @@
-package test
+package chunkserver
 
 import (
 	"testing"
 	"zircon/apis"
 	"zircon/chunkserver/storage"
 	"github.com/stretchr/testify/require"
-	"zircon/chunkserver"
 	"zircon/chunkserver/control"
 	"zircon/rpc"
 )
@@ -18,7 +17,7 @@ func NewTestChunkserver(t *testing.T, cache rpc.ConnectionCache) (apis.Chunkserv
 	require.NoError(t, err)
 	single, teardown, err := control.ExposeChunkserver(mem)
 	require.NoError(t, err)
-	server, err := chunkserver.WithChatter(single, cache)
+	server, err := WithChatter(single, cache)
 	require.NoError(t, err)
 
 	stats := mem.(*storage.MemoryStorage).StatsForTesting

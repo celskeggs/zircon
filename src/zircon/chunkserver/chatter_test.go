@@ -6,7 +6,6 @@ import (
 	"zircon/apis"
 	"zircon/rpc"
 	"zircon/util"
-	"zircon/chunkserver/test"
 )
 
 func TestChatterReplicate(t *testing.T) {
@@ -14,9 +13,9 @@ func TestChatterReplicate(t *testing.T) {
 
 	cache := rpc.NewConnectionCache()
 
-	main, _, mainT := test.NewTestChunkserver(t, cache)
+	main, _, mainT := NewTestChunkserver(t, cache)
 	defer mainT()
-	alt, _, altT := test.NewTestChunkserver(t, cache)
+	alt, _, altT := NewTestChunkserver(t, cache)
 	defer altT()
 
 	teardown, address, err := rpc.PublishChunkserver(alt, ":0")
@@ -41,11 +40,11 @@ func TestChatterStartReplicated(t *testing.T) {
 
 	cache := rpc.NewConnectionCache()
 
-	main, _, mainT := test.NewTestChunkserver(t, cache)
+	main, _, mainT := NewTestChunkserver(t, cache)
 	defer mainT()
-	alt1, _, alt1T := test.NewTestChunkserver(t, cache)
+	alt1, _, alt1T := NewTestChunkserver(t, cache)
 	defer alt1T()
-	alt2, _, alt2T := test.NewTestChunkserver(t, cache)
+	alt2, _, alt2T := NewTestChunkserver(t, cache)
 	defer alt2T()
 
 	teardown1, address1, err := rpc.PublishChunkserver(alt1, ":0")
