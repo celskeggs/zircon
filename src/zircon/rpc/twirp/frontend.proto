@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package zircon.rpc.twirp;
+option go_package = "zircon/rpc/twirp";
+
+service Frontend {
+    rpc ReadMetadataEntry (Frontend_ReadMetadataEntry) returns (Frontend_ReadMetadataEntry_Result);
+    rpc CommitWrite (Frontend_CommitWrite) returns (Frontend_CommitWrite_Result);
+    rpc New (Frontend_New) returns (Frontend_New_Result);
+    rpc Delete (Frontend_Delete) returns (Frontend_Delete_Result);
+}
+
+message Frontend_ReadMetadataEntry {
+    uint64 chunk = 1;
+}
+
+message Frontend_ReadMetadataEntry_Result {
+    uint64 version = 1;
+    repeated string address = 2;
+}
+
+message Frontend_CommitWrite {
+    uint64 chunk = 1;
+    uint64 version = 2;
+    string hash = 3;
+}
+
+message Frontend_CommitWrite_Result {
+    uint64 version = 1;
+}
+
+message Frontend_New {
+    // empty
+}
+
+message Frontend_New_Result {
+    uint64 chunk = 1;
+}
+
+message Frontend_Delete {
+    uint64 chunk = 1;
+    uint64 version = 2;
+}
+
+message Frontend_Delete_Result {
+    // empty
+}

@@ -20,6 +20,21 @@ func ConfigureMemoryStorage() (ChunkStorage, error) {
 	}, nil
 }
 
+// returns semi-fake storage usage stats for testing
+func (m *MemoryStorage) StatsForTesting() int {
+	if m.isClosed {
+		panic("attempt to use closed MemoryStorage")
+	}
+	chunkCount := 0
+	for _, v := range m.chunks {
+		chunkCount += len(v)
+	}
+	entryCount := len(m.chunks) + len(m.latest) + chunkCount
+	// let's approximate 32 bytes per hash table entry
+	// and 8 MB per chunk of data
+	return entryCount * 32 + chunkCount * int(apis.MaxChunkSize)
+}
+
 func (m *MemoryStorage) assertOpen() {
 	if m.isClosed {
 		panic("attempt to use closed MemoryStorage")

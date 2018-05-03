@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"github.com/pkg/errors"
+	"errors"
 	"time"
 	"strconv"
 	"encoding/json"

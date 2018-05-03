@@ -19,7 +19,7 @@ message Chunkserver_StartWriteReplicated {
     uint64 chunk = 1;
     uint32 offset = 2;
     bytes data = 3;
-    repeated string address = 4;
+    repeated string addresses = 4;
 }
 
 message Chunkserver_Replicate {
