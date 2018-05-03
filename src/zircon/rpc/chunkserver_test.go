@@ -3,15 +3,15 @@ package rpc
 import (
 	"errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"testing"
 	"zircon/apis"
+	"zircon/apis/mocks"
 )
 
-func beginTest(t *testing.T) (*MockChunkserver, func(), apis.Chunkserver) {
+func beginTest(t *testing.T) (*mocks.Chunkserver, func(), apis.Chunkserver) {
 	cache := NewConnectionCache()
 
-	mocked := new(MockChunkserver)
+	mocked := new(mocks.Chunkserver)
 
 	teardown, address, err := PublishChunkserver(mocked, ":0")
 	assert.NoError(t, err)
@@ -183,59 +183,4 @@ func TestChunkserver_ListAllChunks_Fail(t *testing.T) {
 		assert.Contains(t, err.Error(), "hello world 09")
 	}
 	assert.Empty(t, chunks)
-}
-
-type MockChunkserver struct {
-	mock.Mock
-}
-
-func (o *MockChunkserver) StartWriteReplicated(chunk apis.ChunkNum, offset apis.Offset, data []byte, replicas []apis.ServerAddress) error {
-	args := o.Called(int(chunk), int(offset), data, replicas)
-	return args.Error(0)
-}
-
-func (o *MockChunkserver) Replicate(chunk apis.ChunkNum, serverAddress apis.ServerAddress, version apis.Version) error {
-	args := o.Called(int(chunk), string(serverAddress), int(version))
-	return args.Error(0)
-}
-
-func (o *MockChunkserver) Read(chunk apis.ChunkNum, offset apis.Offset, length apis.Length, minimum apis.Version) ([]byte, apis.Version, error) {
-	args := o.Called(int(chunk), int(offset), int(length), int(minimum))
-	return []byte(args.String(0)), apis.Version(args.Int(1)), args.Error(2)
-}
-
-func (o *MockChunkserver) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data []byte) error {
-	args := o.Called(int(chunk), int(offset), data)
-	return args.Error(0)
-}
-
-func (o *MockChunkserver) CommitWrite(chunk apis.ChunkNum, hash apis.CommitHash, oldVersion apis.Version, newVersion apis.Version) error {
-	args := o.Called(int(chunk), string(hash), int(oldVersion), int(newVersion))
-	return args.Error(0)
-}
-
-func (o *MockChunkserver) UpdateLatestVersion(chunk apis.ChunkNum, oldVersion apis.Version, newVersion apis.Version) error {
-	args := o.Called(int(chunk), int(oldVersion), int(newVersion))
-	return args.Error(0)
-}
-
-func (o *MockChunkserver) Add(chunk apis.ChunkNum, initialData []byte, initialVersion apis.Version) error {
-	args := o.Called(int(chunk), initialData, int(initialVersion))
-	return args.Error(0)
-}
-
-func (o *MockChunkserver) Delete(chunk apis.ChunkNum, version apis.Version) error {
-	args := o.Called(int(chunk), int(version))
-	return args.Error(0)
-}
-
-func (o *MockChunkserver) ListAllChunks() ([]struct {
-	Chunk   apis.ChunkNum
-	Version apis.Version
-}, error) {
-	args := o.Called()
-	return args.Get(0).([]struct {
-		Chunk   apis.ChunkNum
-		Version apis.Version
-	}), args.Error(1)
 }

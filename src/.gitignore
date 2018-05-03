@@ -1,5 +1,7 @@
 /github.com
 /gopkg.in
 /main
+/golang.org
 /zircon/rpc/twirp/*.pb.go
 /zircon/rpc/twirp/*.twirp.go
+/zircon/apis/mocks/*.go
