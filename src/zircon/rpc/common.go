@@ -70,3 +70,19 @@ func AddressArrayToStringArray(addresses []apis.ServerAddress) []string {
 	}
 	return strings
 }
+
+func IDArrayToIntArray(ids []apis.ServerID) []uint32 {
+	ints := make([]uint32, len(ids))
+	for i, v := range ids {
+		ints[i] = uint32(v)
+	}
+	return ints
+}
+
+func IntArrayToIDArray(ints []uint32) []apis.ServerID {
+	ids := make([]apis.ServerID, len(ints))
+	for i, v := range ints {
+		ids[i] = apis.ServerID(v)
+	}
+	return ids
+}
