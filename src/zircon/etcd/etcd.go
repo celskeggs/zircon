@@ -10,6 +10,7 @@ import (
 	"time"
 	"strconv"
 	"encoding/json"
+	"strings"
 )
 
 type etcdinterface struct {
@@ -40,15 +41,48 @@ func (e *etcdinterface) GetName() apis.ServerName {
 	return e.LocalName
 }
 
-func (e *etcdinterface) GetAddress(name apis.ServerName) (apis.ServerAddress, error) {
-	response, err := e.Client.Get(context.Background(), "/server/addresses/" + string(name))
+func typeToString(kind apis.ServerType) string {
+	switch kind {
+	case apis.FRONTEND:
+		return "frontend"
+	case apis.CHUNKSERVER:
+		return "chunkserver"
+	case apis.METADATACACHE:
+		return "metadatacache"
+	default:
+		panic("invalid server type")
+	}
+}
+
+func (e *etcdinterface) GetAddress(name apis.ServerName, kind apis.ServerType) (apis.ServerAddress, error) {
+	response, err := e.Client.Get(context.Background(), "/server/addresses/" + typeToString(kind) + "/" + string(name))
 	if err != nil {
 		return "", err
 	}
 	if len(response.Kvs) == 0 {
-		return "", fmt.Errorf("no address for server: %s", name)
+		return "", fmt.Errorf("no address for server %s with type %s", name, typeToString(kind))
 	}
 	return apis.ServerAddress(response.Kvs[0].Value), nil
+}
+
+func (e *etcdinterface) ListServers(kind apis.ServerType) ([]apis.ServerName, error) {
+	start := "/server/addresses/" + typeToString(kind) + "/"
+	end := "/server/addresses/" + typeToString(kind) + "0"  // because '0' is the character directly after '/'
+	response, err := e.Client.Get(context.Background(), start, clientv3.WithRange(end), clientv3.WithLimit(0), clientv3.WithKeysOnly())
+	if err != nil {
+		return nil, err
+	}
+	if response.More {
+		return nil, errors.New("etcd refused to return all results at once")
+	}
+	var results []apis.ServerName
+	for _, kv := range response.Kvs {
+		if !strings.HasPrefix(string(kv.Key), start) {
+			return nil, fmt.Errorf("unexpected key in result: '%s' when prefix was '%s'", string(kv.Key), start)
+		}
+		results = append(results, apis.ServerName(kv.Key[len(start):]))
+	}
+	return results, nil
 }
 
 // Note: if the server crashes after calling this and before using the result, a server ID could be skipped.
@@ -127,8 +161,8 @@ func (e *etcdinterface) getAndCorrectIdForName(name apis.ServerName) (apis.Serve
 	}
 }
 
-func (e *etcdinterface) UpdateAddress(address apis.ServerAddress) error {
-	_, err := e.Client.Put(context.Background(), "/server/addresses/" + string(e.LocalName), string(address))
+func (e *etcdinterface) UpdateAddress(address apis.ServerAddress, kind apis.ServerType) error {
+	_, err := e.Client.Put(context.Background(), "/server/addresses/" + typeToString(kind) + "/" + string(e.LocalName), string(address))
 
 	id, err := e.getAndCorrectIdForName(e.LocalName)
 	if err != nil {

@@ -11,18 +11,29 @@ type ServerAddress string
 // The space efficient id of a server
 type ServerID uint32
 
+// A type of server
+type ServerType int
+
+const (
+	FRONTEND ServerType = iota
+	METADATACACHE ServerType = iota
+	CHUNKSERVER ServerType = iota
+)
+
 type EtcdInterface interface {
 	// Get the name of this server
 	GetName() ServerName
 
 	// Get the address of a particular server by name, or returns an error if it doesn't exist.
-	GetAddress(name ServerName) (ServerAddress, error)
-	// Update the address of this server, and assigns an ID if necessary.
-	UpdateAddress(address ServerAddress) error
+	GetAddress(name ServerName, kind ServerType) (ServerAddress, error)
+	// Update the address and type of this server. Assigns an ID if necessary.
+	UpdateAddress(address ServerAddress, kind ServerType) error
 	// Get the name corresponding to a ServerID
 	GetNameByID(id ServerID) (ServerName, error)
 	// Get the ServerID corresponding to a name
 	GetIDByName(name ServerName) (ServerID, error)
+	// Lists server names by type of server
+	ListServers(kind ServerType) ([]ServerName, error)
 
 	// Prepares this interface to accept claims for metadata
 	BeginMetadataLease() error
