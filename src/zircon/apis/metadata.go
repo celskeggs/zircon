@@ -9,8 +9,10 @@ type Metametadata struct {
 }
 
 type MetadataEntry struct {
-	Version  Version
-	Replicas []ServerID
+	// these two versions can be mismatched if a write was aborted.
+	MostRecentVersion   Version
+	LastConsumedVersion Version
+	Replicas            []ServerID
 }
 
 type MetadataCache interface {
@@ -19,7 +21,7 @@ type MetadataCache interface {
 	// Reads the metadata entry of a particular chunk.
 	ReadEntry(chunk ChunkNum) (MetadataEntry, error)
 	// Update the metadate entry of a particular chunk.
-	UpdateEntry(chunk ChunkNum, entry MetadataEntry) error
+	UpdateEntry(chunk ChunkNum, previousEntry MetadataEntry, newEntry MetadataEntry) error
 	// Delete a metadata entry and allow the garbage collection of the underlying chunks
 	DeleteEntry(chunk ChunkNum) error
 }
