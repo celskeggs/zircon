@@ -3,7 +3,7 @@ package control
 import (
 	"zircon/apis"
 	"zircon/rpc"
-	"github.com/pkg/errors"
+	"errors"
 )
 
 // Construct a client handler that can provide the apis.Client interface based on a single frontend and a way to connect

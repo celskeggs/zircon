@@ -3,7 +3,7 @@ package services
 import (
 	"zircon/apis"
 	"zircon/rpc"
-	"github.com/pkg/errors"
+	"errors"
 )
 
 // Launches cluster services, such as replication and garbage collection.

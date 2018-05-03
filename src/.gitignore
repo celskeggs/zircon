@@ -5,3 +5,5 @@
 /zircon/rpc/twirp/*.pb.go
 /zircon/rpc/twirp/*.twirp.go
 /zircon/apis/mocks/*.go
+/protobuf
+/protoc-*.zip

@@ -3,6 +3,26 @@ set -e -u
 
 cd "$(dirname "$0")"
 
+export GOPATH="$(dirname $(pwd))"
+
+# update go packages
+
+echo "downloading packages"
+echo "WARNING: INSECURE: CODE SHOULD BE VENDORED BEFORE PRODUCTION"
+
+if [ ! -e protobuf ]
+then
+	wget https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip
+	unzip protoc-3.5.1-linux-x86_64.zip -d protobuf
+fi
+go get github.com/twitchtv/twirp/protoc-gen-twirp
+go get github.com/golang/protobuf/protoc-gen-go
+go get github.com/vektra/mockery/.../
+go get gopkg.in/yaml.v2
+go get github.com/coreos/etcd/clientv3
+
+export PATH="$PATH:$GOPATH/bin:$(pwd)/protobuf/bin"
+
 # generate twirp bindings
 
 echo "Generating twirp bindings"
