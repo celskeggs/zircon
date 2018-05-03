@@ -1,5 +1,5 @@
 /github.com
 /gopkg.in
 /main
-/zircon/rpc/twirp/chunkserver.pb.go
-/zircon/rpc/twirp/chunkserver.twirp.go
+/zircon/rpc/twirp/*.pb.go
+/zircon/rpc/twirp/*.twirp.go
