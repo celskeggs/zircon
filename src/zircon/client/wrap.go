@@ -39,7 +39,7 @@ func ConfigureNetworkedClient(config Configuration) (apis.Client, error) {
 		return nil, err
 	}
 	return &clientWithCloseCallback{
-		base: client,
+		base:  client,
 		close: cache.CloseAll,
 	}, nil
 }

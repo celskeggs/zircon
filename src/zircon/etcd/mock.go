@@ -1,16 +1,16 @@
 package etcd
 
 import (
-	"time"
-	"github.com/coreos/etcd/embed"
-	"net/url"
-	"os"
 	"fmt"
-	"testing"
-	"zircon/apis"
+	"github.com/coreos/etcd/embed"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/rand"
+	"net/url"
+	"os"
+	"testing"
+	"time"
+	"zircon/apis"
 )
 
 const TestingLeaseTimeout = time.Second
@@ -90,14 +90,14 @@ func PrepareSubscribeForTesting(t *testing.T) (subscribe func(local apis.ServerN
 	servers := []apis.ServerAddress{apis.ServerAddress(server)}
 
 	return func(local apis.ServerName) (apis.EtcdInterface, func()) {
-		iface, err := SubscribeEtcd(local, servers)
-		require.NoError(t, err)
-		return iface, func() {
-			err := iface.Close()
+			iface, err := SubscribeEtcd(local, servers)
+			require.NoError(t, err)
+			return iface, func() {
+				err := iface.Close()
+				require.NoError(t, err)
+			}
+		}, func() {
+			err := abort()
 			require.NoError(t, err)
 		}
-	}, func() {
-		err := abort()
-		require.NoError(t, err)
-	}
 }

@@ -1,10 +1,10 @@
 package rpc
 
 import (
+	"context"
 	"net/http"
 	"zircon/apis"
 	"zircon/rpc/twirp"
-	"context"
 )
 
 // Connects to an RPC handler for a Frontend on a certain address.
@@ -77,9 +77,9 @@ func (p *proxyTwirpAsFrontend) ReadMetadataEntry(chunk apis.ChunkNum) (apis.Vers
 
 func (p *proxyTwirpAsFrontend) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash apis.CommitHash) (apis.Version, error) {
 	result, err := p.server.CommitWrite(context.Background(), &twirp.Frontend_CommitWrite{
-		Chunk: uint64(chunk),
+		Chunk:   uint64(chunk),
 		Version: uint64(version),
-		Hash: string(hash),
+		Hash:    string(hash),
 	})
 	if err != nil {
 		return 0, err
@@ -97,7 +97,7 @@ func (p *proxyTwirpAsFrontend) New() (apis.ChunkNum, error) {
 
 func (p *proxyTwirpAsFrontend) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	_, err := p.server.Delete(context.Background(), &twirp.Frontend_Delete{
-		Chunk: uint64(chunk),
+		Chunk:   uint64(chunk),
 		Version: uint64(version),
 	})
 	return err

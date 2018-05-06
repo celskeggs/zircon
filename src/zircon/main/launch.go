@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"gopkg.in/yaml.v2"
 	"os"
+	"zircon/apis"
 	"zircon/chunkserver"
 	"zircon/chunkserver/control"
 	"zircon/chunkserver/storage"
 	"zircon/client"
 	"zircon/client/demo"
 	"zircon/rpc"
-	"zircon/apis"
 )
 
 type Config struct {

@@ -1,11 +1,11 @@
 package rpc
 
 import (
+	"errors"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"zircon/apis"
-	"github.com/stretchr/testify/assert"
 	"zircon/apis/mocks"
-	"errors"
 )
 
 func beginFrontendTest(t *testing.T) (*mocks.Frontend, func(), apis.Frontend) {

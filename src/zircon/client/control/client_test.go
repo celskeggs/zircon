@@ -1,30 +1,30 @@
 package control
 
 import (
-	"testing"
-	"zircon/apis"
-	"zircon/rpc"
-	"github.com/stretchr/testify/assert"
 	"fmt"
-	"zircon/frontend"
-	"zircon/etcd"
-	"zircon/util"
-	"strconv"
-	"math/rand"
-	"time"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"math/rand"
+	"strconv"
+	"testing"
+	"time"
+	"zircon/apis"
 	"zircon/chunkserver"
+	"zircon/etcd"
+	"zircon/frontend"
+	"zircon/rpc"
+	"zircon/util"
 )
 
 // Prepares three chunkservers (cs0-cs2) and one frontend server (fe0)
 func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats chunkserver.StorageStats, fe apis.Frontend, teardown func()) {
-	cache := &rpc.MockCache {
+	cache := &rpc.MockCache{
 		Frontends: map[apis.ServerAddress]apis.Frontend{},
 	}
 	cs0, stats1, teardown1 := chunkserver.NewTestChunkserver(t, cache)
 	cs1, stats2, teardown2 := chunkserver.NewTestChunkserver(t, cache)
 	cs2, stats3, teardown3 := chunkserver.NewTestChunkserver(t, cache)
-	cache.Chunkservers = map[apis.ServerAddress]apis.Chunkserver {
+	cache.Chunkservers = map[apis.ServerAddress]apis.Chunkserver{
 		"cs0": cs0,
 		"cs1": cs1,
 		"cs2": cs2,
@@ -34,15 +34,15 @@ func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats chun
 	fe, err := frontend.ConstructFrontendOnNetwork(etcd0, cache)
 	assert.NoError(t, err)
 	return cache, func() int {
-		// TODO: include partial metadata usage in these stats?
-		return stats1() + stats2() + stats3()
-	}, fe, func() {
-		teardown5()
-		teardown4()
-		teardown3()
-		teardown2()
-		teardown1()
-	}
+			// TODO: include partial metadata usage in these stats?
+			return stats1() + stats2() + stats3()
+		}, fe, func() {
+			teardown5()
+			teardown4()
+			teardown3()
+			teardown2()
+			teardown1()
+		}
 }
 
 func PrepareSimpleClient(t *testing.T) (apis.Client, func()) {
@@ -112,7 +112,7 @@ func TestMaxSizeChecking(t *testing.T) {
 	assert.NoError(t, err)
 
 	data := make([]byte, apis.MaxChunkSize-1)
-	data[len(data) - 1] = 'a'
+	data[len(data)-1] = 'a'
 	ver, err := client.Write(cn, 2, apis.AnyVersion, data)
 	assert.Error(t, err)
 	assert.Equal(t, 0, ver)
@@ -130,8 +130,8 @@ func TestMaxSizeChecking(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, ver, ver2)
 	assert.Equal(t, apis.MaxChunkSize, len(rdata))
-	assert.Equal(t, byte('a'), rdata[apis.MaxChunkSize - 1])
-	assert.Empty(t, util.StripTrailingZeroes(rdata[:apis.MaxChunkSize - 1]))
+	assert.Equal(t, byte('a'), rdata[apis.MaxChunkSize-1])
+	assert.Empty(t, util.StripTrailingZeroes(rdata[:apis.MaxChunkSize-1]))
 
 	// attempt out-of-bounds read
 	_, _, err = client.Read(cn, 1, apis.MaxChunkSize)
@@ -145,7 +145,7 @@ func TestConflictingClients(t *testing.T) {
 
 	var chunk apis.ChunkNum
 
-	func () {
+	func() {
 		setupClient, err := ConstructClient(fe, cache)
 		require.NoError(t, err)
 		defer setupClient.Close()
@@ -155,7 +155,10 @@ func TestConflictingClients(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
-	complete := make(chan struct{subtotal int; count int})
+	complete := make(chan struct {
+		subtotal int
+		count    int
+	})
 	count := 10
 
 	finishAt := time.Now().Add(time.Second)
@@ -166,9 +169,15 @@ func TestConflictingClients(t *testing.T) {
 			ok := false
 			defer func() {
 				if ok {
-					complete <- struct {subtotal int;count int}{subtotal, subcount}
+					complete <- struct {
+						subtotal int
+						count    int
+					}{subtotal, subcount}
 				} else {
-					complete <- struct {subtotal int;count int}{0, -1}
+					complete <- struct {
+						subtotal int
+						count    int
+					}{0, -1}
 				}
 			}()
 
@@ -214,7 +223,7 @@ func TestConflictingClients(t *testing.T) {
 	}
 	assert.True(t, finalCount >= 1000, "not enough requests processed: %d/1000", finalCount)
 
-	checkSum := func () int {
+	checkSum := func() int {
 		teardownClient, err := ConstructClient(fe, cache)
 		assert.NoError(t, err)
 		defer teardownClient.Close()
@@ -412,7 +421,7 @@ func TestIncompleteRemoval(t *testing.T) {
 	defer teardown()
 
 	// perform one creation and deletion so that any metadata needed is allocated
-	func () {
+	func() {
 		client, err := ConstructClient(fe, cache)
 		require.NoError(t, err)
 		defer client.Close()

@@ -102,9 +102,9 @@ func (p *proxyTwirpAsChunkserver) StartWriteReplicated(chunk apis.ChunkNum, offs
 	replicas []apis.ServerAddress) error {
 
 	_, err := p.server.StartWriteReplicated(context.Background(), &twirp.Chunkserver_StartWriteReplicated{
-		Chunk:   uint64(chunk),
-		Offset:  uint32(offset),
-		Data:    data,
+		Chunk:     uint64(chunk),
+		Offset:    uint32(offset),
+		Data:      data,
 		Addresses: AddressArrayToStringArray(replicas),
 	})
 	return err

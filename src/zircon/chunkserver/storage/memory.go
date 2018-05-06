@@ -32,7 +32,7 @@ func (m *MemoryStorage) StatsForTesting() int {
 	entryCount := len(m.chunks) + len(m.latest) + chunkCount
 	// let's approximate 32 bytes per hash table entry
 	// and 8 MB per chunk of data
-	return entryCount * 32 + chunkCount * int(apis.MaxChunkSize)
+	return entryCount*32 + chunkCount*int(apis.MaxChunkSize)
 }
 
 func (m *MemoryStorage) assertOpen() {

@@ -1,19 +1,19 @@
 package control
 
 import (
+	"errors"
+	"fmt"
+	"math/rand"
+	"sync"
 	"zircon/apis"
 	"zircon/rpc"
-	"sync"
-	"errors"
-	"math/rand"
-	"fmt"
 )
 
 const InitialReplicationFactor = 2
 
 type frontend struct {
-	etcd     apis.EtcdInterface
-	cache    rpc.ConnectionCache
+	etcd  apis.EtcdInterface
+	cache rpc.ConnectionCache
 
 	mu       sync.Mutex
 	metadata apis.MetadataCache
@@ -47,7 +47,7 @@ func (f *frontend) getMetadataCache() (apis.MetadataCache, error) {
 		if err != nil {
 			return nil, err
 		}
-		chosen := options[int(myId) % len(options)]
+		chosen := options[int(myId)%len(options)]
 		// this shouldn't fail, given that ListServers returned this...
 		address, err = f.etcd.GetAddress(chosen, apis.METADATACACHE)
 		if err != nil {
@@ -102,9 +102,9 @@ func (f *frontend) New() (apis.ChunkNum, error) {
 		return 0, err
 	}
 	err = mc.UpdateEntry(chunk, apis.MetadataEntry{}, apis.MetadataEntry{
-		MostRecentVersion: 0,
+		MostRecentVersion:   0,
 		LastConsumedVersion: 0,
-		Replicas: replicas,
+		Replicas:            replicas,
 	})
 	// TODO: how does garbage collection know not to delete this until the client disconnects early or this server crashes?
 	if err != nil {
@@ -236,7 +236,7 @@ func (f *frontend) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	// First, we mark this as deleted
 	oldEntry := entry
 	entry.MostRecentVersion = 0
-	entry.LastConsumedVersion += 1  // just in case it was still zero; this ensures that this is treated as "deleted" and not just "empty"
+	entry.LastConsumedVersion += 1 // just in case it was still zero; this ensures that this is treated as "deleted" and not just "empty"
 	if err := cache.UpdateEntry(chunk, oldEntry, entry); err != nil {
 		return fmt.Errorf("while updating metadata entry: %v", err)
 	}

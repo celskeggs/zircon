@@ -1,9 +1,9 @@
 package frontend
 
 import (
+	"errors"
 	"zircon/apis"
 	"zircon/rpc"
-	"errors"
 )
 
 // Constructs a frontend that can connect to the network
