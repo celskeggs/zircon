@@ -28,7 +28,8 @@ message MetadataCache_ReadEntry_Result {
 
 message MetadataCache_UpdateEntry {
     uint64 chunk = 1;
-    MetadataEntry entry = 2;
+    MetadataEntry previousEntry = 2;
+    MetadataEntry newEntry = 3;
 }
 
 message MetadataCache_UpdateEntry_Result {
@@ -44,6 +45,7 @@ message MetadataCache_DeleteEntry_Result {
 }
 
 message MetadataEntry {
-    uint64 version = 1;
-    repeated uint32 serverIDs = 2;
+    uint64 mostRecentVersion = 1;
+    uint64 lastConsumedVersion = 2;
+    repeated uint32 serverIDs = 3;
 }

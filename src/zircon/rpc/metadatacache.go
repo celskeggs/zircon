@@ -1,9 +1,9 @@
 package rpc
 
 import (
-	"zircon/apis"
-	"net/http"
 	"context"
+	"net/http"
+	"zircon/apis"
 	"zircon/rpc/twirp"
 )
 
@@ -42,16 +42,22 @@ func (p *proxyMetadataCacheAsTwirp) ReadEntry(ctx context.Context, request *twir
 	}
 	return &twirp.MetadataCache_ReadEntry_Result{
 		Entry: &twirp.MetadataEntry{
-			Version: uint64(entry.Version),
-			ServerIDs: IDArrayToIntArray(entry.Replicas),
+			MostRecentVersion:   uint64(entry.MostRecentVersion),
+			LastConsumedVersion: uint64(entry.LastConsumedVersion),
+			ServerIDs:           IDArrayToIntArray(entry.Replicas),
 		},
 	}, nil
 }
 
 func (p *proxyMetadataCacheAsTwirp) UpdateEntry(ctx context.Context, request *twirp.MetadataCache_UpdateEntry) (*twirp.MetadataCache_UpdateEntry_Result, error) {
 	err := p.server.UpdateEntry(apis.ChunkNum(request.Chunk), apis.MetadataEntry{
-		Version:  apis.Version(request.Entry.Version),
-		Replicas: IntArrayToIDArray(request.Entry.ServerIDs),
+		MostRecentVersion:   apis.Version(request.PreviousEntry.MostRecentVersion),
+		LastConsumedVersion: apis.Version(request.PreviousEntry.LastConsumedVersion),
+		Replicas:            IntArrayToIDArray(request.PreviousEntry.ServerIDs),
+	}, apis.MetadataEntry{
+		MostRecentVersion:   apis.Version(request.NewEntry.MostRecentVersion),
+		LastConsumedVersion: apis.Version(request.NewEntry.LastConsumedVersion),
+		Replicas:            IntArrayToIDArray(request.NewEntry.ServerIDs),
 	})
 	return &twirp.MetadataCache_UpdateEntry_Result{}, err
 }
@@ -81,17 +87,24 @@ func (p *proxyTwirpAsMetadataCache) ReadEntry(chunk apis.ChunkNum) (apis.Metadat
 		return apis.MetadataEntry{}, err
 	}
 	return apis.MetadataEntry{
-		Version: apis.Version(result.Entry.Version),
-		Replicas: IntArrayToIDArray(result.Entry.ServerIDs),
+		MostRecentVersion:   apis.Version(result.Entry.MostRecentVersion),
+		LastConsumedVersion: apis.Version(result.Entry.LastConsumedVersion),
+		Replicas:            IntArrayToIDArray(result.Entry.ServerIDs),
 	}, nil
 }
 
-func (p *proxyTwirpAsMetadataCache) UpdateEntry(chunk apis.ChunkNum, entry apis.MetadataEntry) error {
+func (p *proxyTwirpAsMetadataCache) UpdateEntry(chunk apis.ChunkNum, previousEntry apis.MetadataEntry, newEntry apis.MetadataEntry) error {
 	_, err := p.server.UpdateEntry(context.Background(), &twirp.MetadataCache_UpdateEntry{
 		Chunk: uint64(chunk),
-		Entry: &twirp.MetadataEntry{
-			Version: uint64(entry.Version),
-			ServerIDs: IDArrayToIntArray(entry.Replicas),
+		PreviousEntry: &twirp.MetadataEntry{
+			MostRecentVersion:   uint64(previousEntry.MostRecentVersion),
+			LastConsumedVersion: uint64(previousEntry.LastConsumedVersion),
+			ServerIDs:           IDArrayToIntArray(previousEntry.Replicas),
+		},
+		NewEntry: &twirp.MetadataEntry{
+			MostRecentVersion:   uint64(newEntry.MostRecentVersion),
+			LastConsumedVersion: uint64(newEntry.LastConsumedVersion),
+			ServerIDs:           IDArrayToIntArray(newEntry.Replicas),
 		},
 	})
 	return err

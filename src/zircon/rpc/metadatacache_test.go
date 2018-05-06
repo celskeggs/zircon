@@ -1,11 +1,11 @@
 package rpc
 
 import (
+	"errors"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"zircon/apis"
-	"github.com/stretchr/testify/assert"
 	"zircon/apis/mocks"
-	"errors"
 )
 
 func beginMetadataCacheTest(t *testing.T) (*mocks.MetadataCache, func(), apis.MetadataCache) {
@@ -53,16 +53,18 @@ func TestMetadataCache_ReadEntry(t *testing.T) {
 	defer teardown()
 
 	mocked.On("ReadEntry", apis.ChunkNum(556)).Return(apis.MetadataEntry{
-		Version: 900,
-		Replicas: []apis.ServerID{ 0, 1, 555555 },
+		MostRecentVersion:   900,
+		LastConsumedVersion: 900,
+		Replicas:            []apis.ServerID{0, 1, 555555},
 	}, nil)
 	mocked.On("ReadEntry", apis.ChunkNum(0)).Return(apis.MetadataEntry{}, errors.New("metadatacache error 2"))
 
 	version, err := server.ReadEntry(556)
 	assert.NoError(t, err)
 	assert.Equal(t, apis.MetadataEntry{
-		Version: 900,
-		Replicas: []apis.ServerID{ 0, 1, 555555 },
+		MostRecentVersion:   900,
+		LastConsumedVersion: 900,
+		Replicas:            []apis.ServerID{0, 1, 555555},
 	}, version)
 
 	_, err = server.ReadEntry(0)
@@ -74,21 +76,32 @@ func TestMetadataCache_UpdateEntry(t *testing.T) {
 	mocked, teardown, server := beginMetadataCacheTest(t)
 	defer teardown()
 
-	mocked.On("UpdateEntry", apis.ChunkNum(557), apis.MetadataEntry{
-		Version: 901,
-		Replicas: []apis.ServerID{ 5, 88, 71 },
-	}).Return(nil)
-	mocked.On("UpdateEntry", apis.ChunkNum(0), apis.MetadataEntry{
-		Replicas: []apis.ServerID{},
-	}).Return(errors.New("metadatacache error 3"))
+	mocked.On("UpdateEntry", apis.ChunkNum(557),
+		apis.MetadataEntry{
+			Replicas: []apis.ServerID{},
+		},
+		apis.MetadataEntry{
+			MostRecentVersion:   901,
+			LastConsumedVersion: 901,
+			Replicas:            []apis.ServerID{5, 88, 71},
+		}).Return(nil)
+	mocked.On("UpdateEntry", apis.ChunkNum(0),
+		apis.MetadataEntry{
+			Replicas: []apis.ServerID{},
+		},
+		apis.MetadataEntry{
+			Replicas: []apis.ServerID{},
+		}).Return(errors.New("metadatacache error 3"))
 
-	err := server.UpdateEntry(557, apis.MetadataEntry{
-		Version: 901,
-		Replicas: []apis.ServerID{ 5, 88, 71 },
-	})
+	err := server.UpdateEntry(557, apis.MetadataEntry{},
+		apis.MetadataEntry{
+			MostRecentVersion:   901,
+			LastConsumedVersion: 901,
+			Replicas:            []apis.ServerID{5, 88, 71},
+		})
 	assert.NoError(t, err)
 
-	err = server.UpdateEntry(0, apis.MetadataEntry{})
+	err = server.UpdateEntry(0, apis.MetadataEntry{}, apis.MetadataEntry{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "metadatacache error 3")
 }
