@@ -1,16 +1,16 @@
 package etcd
 
 import (
-	"github.com/coreos/etcd/clientv3"
-	"zircon/apis"
 	"context"
-	"fmt"
-	"sync"
-	"errors"
-	"time"
-	"strconv"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/coreos/etcd/clientv3"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
+	"zircon/apis"
 )
 
 type etcdinterface struct {
@@ -55,7 +55,7 @@ func typeToString(kind apis.ServerType) string {
 }
 
 func (e *etcdinterface) GetAddress(name apis.ServerName, kind apis.ServerType) (apis.ServerAddress, error) {
-	response, err := e.Client.Get(context.Background(), "/server/addresses/" + typeToString(kind) + "/" + string(name))
+	response, err := e.Client.Get(context.Background(), "/server/addresses/"+typeToString(kind)+"/"+string(name))
 	if err != nil {
 		return "", err
 	}
@@ -67,7 +67,7 @@ func (e *etcdinterface) GetAddress(name apis.ServerName, kind apis.ServerType) (
 
 func (e *etcdinterface) ListServers(kind apis.ServerType) ([]apis.ServerName, error) {
 	start := "/server/addresses/" + typeToString(kind) + "/"
-	end := "/server/addresses/" + typeToString(kind) + "0"  // because '0' is the character directly after '/'
+	end := "/server/addresses/" + typeToString(kind) + "0" // because '0' is the character directly after '/'
 	response, err := e.Client.Get(context.Background(), start, clientv3.WithRange(end), clientv3.WithLimit(0), clientv3.WithKeysOnly())
 	if err != nil {
 		return nil, err
@@ -162,7 +162,7 @@ func (e *etcdinterface) getAndCorrectIdForName(name apis.ServerName) (apis.Serve
 }
 
 func (e *etcdinterface) UpdateAddress(address apis.ServerAddress, kind apis.ServerType) error {
-	_, err := e.Client.Put(context.Background(), "/server/addresses/" + typeToString(kind) + "/" + string(e.LocalName), string(address))
+	_, err := e.Client.Put(context.Background(), "/server/addresses/"+typeToString(kind)+"/"+string(e.LocalName), string(address))
 
 	id, err := e.getAndCorrectIdForName(e.LocalName)
 	if err != nil {
@@ -294,6 +294,11 @@ func (e *etcdinterface) TryClaimingMetadata(blockid apis.MetadataID) (apis.Serve
 	}
 }
 
+// Try claiming some block of metametadata that is available and report how many remaining blocks are available to be leased
+func (e *etcdinterface) LeaseSomeMetametadata() (apis.MetadataID, int, error) {
+	panic("Unimplemented")
+}
+
 // Assuming that this server owns a particular block of metadata, release that metadata back out into the wild.
 func (e *etcdinterface) DisclaimMetadata(blockid apis.MetadataID) error {
 	key := fmt.Sprintf("/metadata/claims/%d", blockid)
@@ -330,8 +335,8 @@ func (e *etcdinterface) GetMetametadata(blockid apis.MetadataID) (apis.Metametad
 	if len(kvs) == 0 {
 		// just return an empty block by default
 		return apis.Metametadata{
-			MetaID: blockid,
-			Version: 0,
+			MetaID:    blockid,
+			Version:   0,
 			Locations: nil,
 		}, nil
 	} else {

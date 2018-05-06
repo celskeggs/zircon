@@ -15,9 +15,9 @@ type ServerID uint32
 type ServerType int
 
 const (
-	FRONTEND ServerType = iota
+	FRONTEND      ServerType = iota
 	METADATACACHE ServerType = iota
-	CHUNKSERVER ServerType = iota
+	CHUNKSERVER   ServerType = iota
 )
 
 type EtcdInterface interface {
@@ -44,6 +44,8 @@ type EtcdInterface interface {
 	TryClaimingMetadata(blockid MetadataID) (owner ServerName, err error)
 	// Assuming that this server owns a particular block of metadata, release that metadata back out into the wild.
 	DisclaimMetadata(blockid MetadataID) error
+	// Claim some unclaimed metametablock and return number of blocks available for claim
+	LeaseSomeMetametadata() (MetadataID, int, error)
 	// Renew the claim on all metadata blocks
 	RenewMetadataClaims() error
 

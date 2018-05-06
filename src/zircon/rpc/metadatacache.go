@@ -36,9 +36,11 @@ func (p *proxyMetadataCacheAsTwirp) NewEntry(ctx context.Context, request *twirp
 }
 
 func (p *proxyMetadataCacheAsTwirp) ReadEntry(ctx context.Context, request *twirp.MetadataCache_ReadEntry) (*twirp.MetadataCache_ReadEntry_Result, error) {
-	entry, err := p.server.ReadEntry(apis.ChunkNum(request.Chunk))
+	entry, owner, err := p.server.ReadEntry(apis.ChunkNum(request.Chunk))
 	if err != nil {
-		return nil, err
+		return &twirp.MetadataCache_ReadEntry_Result{
+			Owner: string(owner),
+		}, nil
 	}
 	return &twirp.MetadataCache_ReadEntry_Result{
 		Entry: &twirp.MetadataEntry{
@@ -50,7 +52,7 @@ func (p *proxyMetadataCacheAsTwirp) ReadEntry(ctx context.Context, request *twir
 }
 
 func (p *proxyMetadataCacheAsTwirp) UpdateEntry(ctx context.Context, request *twirp.MetadataCache_UpdateEntry) (*twirp.MetadataCache_UpdateEntry_Result, error) {
-	err := p.server.UpdateEntry(apis.ChunkNum(request.Chunk), apis.MetadataEntry{
+	owner, err := p.server.UpdateEntry(apis.ChunkNum(request.Chunk), apis.MetadataEntry{
 		MostRecentVersion:   apis.Version(request.PreviousEntry.MostRecentVersion),
 		LastConsumedVersion: apis.Version(request.PreviousEntry.LastConsumedVersion),
 		Replicas:            IntArrayToIDArray(request.PreviousEntry.ServerIDs),
@@ -59,12 +61,16 @@ func (p *proxyMetadataCacheAsTwirp) UpdateEntry(ctx context.Context, request *tw
 		LastConsumedVersion: apis.Version(request.NewEntry.LastConsumedVersion),
 		Replicas:            IntArrayToIDArray(request.NewEntry.ServerIDs),
 	})
-	return &twirp.MetadataCache_UpdateEntry_Result{}, err
+	return &twirp.MetadataCache_UpdateEntry_Result{
+		Owner: string(owner),
+	}, err
 }
 
 func (p *proxyMetadataCacheAsTwirp) DeleteEntry(ctx context.Context, request *twirp.MetadataCache_DeleteEntry) (*twirp.MetadataCache_DeleteEntry_Result, error) {
-	err := p.server.DeleteEntry(apis.ChunkNum(request.Chunk))
-	return &twirp.MetadataCache_DeleteEntry_Result{}, err
+	owner, err := p.server.DeleteEntry(apis.ChunkNum(request.Chunk))
+	return &twirp.MetadataCache_DeleteEntry_Result{
+		Owner: string(owner),
+	}, err
 }
 
 type proxyTwirpAsMetadataCache struct {
@@ -79,22 +85,22 @@ func (p *proxyTwirpAsMetadataCache) NewEntry() (apis.ChunkNum, error) {
 	return apis.ChunkNum(result.Chunk), nil
 }
 
-func (p *proxyTwirpAsMetadataCache) ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, error) {
+func (p *proxyTwirpAsMetadataCache) ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, apis.ServerName, error) {
 	result, err := p.server.ReadEntry(context.Background(), &twirp.MetadataCache_ReadEntry{
 		Chunk: uint64(chunk),
 	})
 	if err != nil {
-		return apis.MetadataEntry{}, err
+		return apis.MetadataEntry{}, apis.ServerName(result.Owner), err
 	}
 	return apis.MetadataEntry{
 		MostRecentVersion:   apis.Version(result.Entry.MostRecentVersion),
 		LastConsumedVersion: apis.Version(result.Entry.LastConsumedVersion),
 		Replicas:            IntArrayToIDArray(result.Entry.ServerIDs),
-	}, nil
+	}, "", nil
 }
 
-func (p *proxyTwirpAsMetadataCache) UpdateEntry(chunk apis.ChunkNum, previousEntry apis.MetadataEntry, newEntry apis.MetadataEntry) error {
-	_, err := p.server.UpdateEntry(context.Background(), &twirp.MetadataCache_UpdateEntry{
+func (p *proxyTwirpAsMetadataCache) UpdateEntry(chunk apis.ChunkNum, previousEntry apis.MetadataEntry, newEntry apis.MetadataEntry) (apis.ServerName, error) {
+	result, err := p.server.UpdateEntry(context.Background(), &twirp.MetadataCache_UpdateEntry{
 		Chunk: uint64(chunk),
 		PreviousEntry: &twirp.MetadataEntry{
 			MostRecentVersion:   uint64(previousEntry.MostRecentVersion),
@@ -107,12 +113,12 @@ func (p *proxyTwirpAsMetadataCache) UpdateEntry(chunk apis.ChunkNum, previousEnt
 			ServerIDs:           IDArrayToIntArray(newEntry.Replicas),
 		},
 	})
-	return err
+	return apis.ServerName(result.Owner), err
 }
 
-func (p *proxyTwirpAsMetadataCache) DeleteEntry(chunk apis.ChunkNum) error {
-	_, err := p.server.DeleteEntry(context.Background(), &twirp.MetadataCache_DeleteEntry{
+func (p *proxyTwirpAsMetadataCache) DeleteEntry(chunk apis.ChunkNum) (apis.ServerName, error) {
+	result, err := p.server.DeleteEntry(context.Background(), &twirp.MetadataCache_DeleteEntry{
 		Chunk: uint64(chunk),
 	})
-	return err
+	return apis.ServerName(result.Owner), err
 }

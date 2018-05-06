@@ -5,9 +5,8 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/stretchr/testify/assert"
 	"testing"
-	"zircon/apis"
 	"time"
-	"fmt"
+	"zircon/apis"
 )
 
 // Just to make sure that our mechanism of launching etcd actually works.
@@ -59,7 +58,7 @@ func TestGetUpdateAddress(t *testing.T) {
 	defer teardown()
 
 	// we do this for three different server types, so that we know that they're treated independently.
-	for _, kind := range []apis.ServerType{ apis.FRONTEND, apis.CHUNKSERVER, apis.METADATACACHE } {
+	for _, kind := range []apis.ServerType{apis.FRONTEND, apis.CHUNKSERVER, apis.METADATACACHE} {
 		_, err := iface1.GetAddress(iface1.GetName(), kind)
 		assert.Error(t, err)
 		_, err = iface1.GetAddress(iface2.GetName(), kind)
@@ -207,8 +206,8 @@ func TestReadWriteMetadata(t *testing.T) {
 	assert.Error(t, err)
 
 	sampleMetametadata := apis.Metametadata{
-		MetaID: 3,
-		Version: 61,
+		MetaID:    3,
+		Version:   61,
 		Locations: []apis.ServerName{"topaz-5", "quartz-43", "ruby-1524"},
 	}
 
@@ -221,8 +220,8 @@ func TestReadWriteMetadata(t *testing.T) {
 
 	data, err := iface1.GetMetametadata(3)
 	assert.NoError(t, err)
-	assert.Equal(t,apis.MetadataID(3), data.MetaID)
-	assert.Equal(t,apis.Version(0), data.Version)
+	assert.Equal(t, apis.MetadataID(3), data.MetaID)
+	assert.Equal(t, apis.Version(0), data.Version)
 	assert.Empty(t, data.Locations)
 
 	assert.NoError(t, iface1.UpdateMetametadata(3, sampleMetametadata))

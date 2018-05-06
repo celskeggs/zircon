@@ -12,6 +12,9 @@ type Length uint32
 // A chunk identifier, not directly exposed to normal clients
 type ChunkNum uint64
 
+// Size in bits of a ChunkNum
+const ChunkNumSize = 64
+
 // 8 MiB, the maximum size of a chunk stored on the chunkserver
 const MaxChunkSize Length = 8 * 1024 * 1024
 
