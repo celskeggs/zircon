@@ -7,6 +7,7 @@ import (
 	"testing"
 	"zircon/apis"
 	"time"
+	"fmt"
 )
 
 // Just to make sure that our mechanism of launching etcd actually works.
@@ -57,28 +58,55 @@ func TestGetUpdateAddress(t *testing.T) {
 	iface1, iface2, teardown := PrepareTwoClients(t)
 	defer teardown()
 
-	_, err := iface1.GetAddress(iface1.GetName())
-	assert.Error(t, err)
-	_, err = iface1.GetAddress(iface2.GetName())
-	assert.Error(t, err)
+	// we do this for three different server types, so that we know that they're treated independently.
+	for _, kind := range []apis.ServerType{ apis.FRONTEND, apis.CHUNKSERVER, apis.METADATACACHE } {
+		_, err := iface1.GetAddress(iface1.GetName(), kind)
+		assert.Error(t, err)
+		_, err = iface1.GetAddress(iface2.GetName(), kind)
+		assert.Error(t, err)
 
-	assert.NoError(t, iface2.UpdateAddress("test-address"))
+		address1 := apis.ServerAddress(fmt.Sprintf("test-address-%v", kind))
+		address2 := apis.ServerAddress(fmt.Sprintf("test-address-updated-%v", kind))
 
-	resp, err := iface1.GetAddress(iface2.GetName())
-	assert.NoError(t, err)
-	assert.Equal(t, apis.ServerAddress("test-address"), resp)
-	resp, err = iface2.GetAddress(iface2.GetName())
-	assert.NoError(t, err)
-	assert.Equal(t, apis.ServerAddress("test-address"), resp)
+		assert.NoError(t, iface2.UpdateAddress(address1, kind))
 
-	assert.NoError(t, iface2.UpdateAddress("test-address-updated"))
+		resp, err := iface1.GetAddress(iface2.GetName(), kind)
+		assert.NoError(t, err)
+		assert.Equal(t, apis.ServerAddress(address1), resp)
+		resp, err = iface2.GetAddress(iface2.GetName(), kind)
+		assert.NoError(t, err)
+		assert.Equal(t, apis.ServerAddress(address1), resp)
 
-	resp, err = iface1.GetAddress(iface2.GetName())
+		assert.NoError(t, iface2.UpdateAddress(address2, kind))
+
+		resp, err = iface1.GetAddress(iface2.GetName(), kind)
+		assert.NoError(t, err)
+		assert.Equal(t, apis.ServerAddress(address2), resp)
+		resp, err = iface2.GetAddress(iface2.GetName(), kind)
+		assert.NoError(t, err)
+		assert.Equal(t, apis.ServerAddress(address2), resp)
+	}
+}
+
+func TestListServers(t *testing.T) {
+	iface1, iface2, teardown := PrepareTwoClients(t)
+	defer teardown()
+
+	assert.NoError(t, iface1.UpdateAddress("test-addr-1", apis.CHUNKSERVER))
+	assert.NoError(t, iface2.UpdateAddress("test-addr-2", apis.CHUNKSERVER))
+	assert.NoError(t, iface2.UpdateAddress("test-addr-3", apis.FRONTEND))
+
+	servers, err := iface1.ListServers(apis.METADATACACHE)
 	assert.NoError(t, err)
-	assert.Equal(t, apis.ServerAddress("test-address-updated"), resp)
-	resp, err = iface2.GetAddress(iface2.GetName())
+	assert.Empty(t, servers)
+
+	servers, err = iface1.ListServers(apis.CHUNKSERVER)
 	assert.NoError(t, err)
-	assert.Equal(t, apis.ServerAddress("test-address-updated"), resp)
+	assert.Equal(t, []apis.ServerName{"test-name", "test-name-2"}, servers)
+
+	servers, err = iface1.ListServers(apis.FRONTEND)
+	assert.NoError(t, err)
+	assert.Equal(t, []apis.ServerName{"test-name-2"}, servers)
 }
 
 // Tests claiming, disclaiming, and timeouts
@@ -223,7 +251,7 @@ func TestServerIDTracking(t *testing.T) {
 	_, err = iface1.GetIDByName(iface2.GetName())
 	assert.Error(t, err)
 
-	assert.NoError(t, iface2.UpdateAddress("test"))
+	assert.NoError(t, iface2.UpdateAddress("test", apis.FRONTEND))
 
 	sid, err := iface2.GetIDByName(iface2.GetName())
 	assert.NoError(t, err)
@@ -234,8 +262,8 @@ func TestServerIDTracking(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, iface2.GetName(), name)
 
-	assert.NoError(t, iface2.UpdateAddress("test2"))
-	assert.NoError(t, iface1.UpdateAddress("test"))
+	assert.NoError(t, iface2.UpdateAddress("test2", apis.FRONTEND))
+	assert.NoError(t, iface1.UpdateAddress("test", apis.FRONTEND))
 
 	sid2, err := iface2.GetIDByName(iface2.GetName())
 	assert.NoError(t, err)

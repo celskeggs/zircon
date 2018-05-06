@@ -9,17 +9,17 @@ import (
 type CommitHash string
 
 type Frontend interface {
-	// Reads the metadata entry of a particular chunk.
-	ReadMetadataEntry(chunk ChunkNum) (Version, []ServerAddress, error)
-
-	// Writes metadata for a particular chunk, after each chunkserver has received a preparation message for this write.
-	// Only performs the write if the version matches.
-	CommitWrite(chunk ChunkNum, version Version, hash CommitHash) (Version, error)
-
 	// Allocates a new chunk, all zeroed out. The version number will be zero, so the only way to access it initially is
 	// with a version of AnyVersion.
 	// If this chunk isn't written to before the connection to the server closes, the empty chunk will be deleted.
 	New() (ChunkNum, error)
+
+	// Reads the metadata entry of a particular chunk.
+	ReadMetadataEntry(chunk ChunkNum) (Version, []ServerAddress, error)
+
+	// Writes metadata for a particular chunk, after each chunkserver has received a preparation message for this write.
+	// Only performs the write if the version matches, or the version is AnyVersion.
+	CommitWrite(chunk ChunkNum, version Version, hash CommitHash) (Version, error)
 
 	// Destroys an old chunk, assuming that the metadata version matches. This includes sending messages to all relevant
 	// chunkservers.

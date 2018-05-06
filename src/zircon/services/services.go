@@ -7,7 +7,7 @@ import (
 )
 
 // Launches cluster services, such as replication and garbage collection.
-func StartServices(etcd apis.EtcdInterface, localCache apis.MetadataCache, rpcCache rpc.ConnectionCache) (cancel func() error, err error) {
+func StartServices(etcd apis.EtcdInterface, rpcCache rpc.ConnectionCache) (cancel func() error, err error) {
 	return nil, errors.New("unimplemented")
 }
 

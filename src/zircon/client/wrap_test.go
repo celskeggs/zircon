@@ -63,7 +63,7 @@ func PrepareNetworkedCluster(t *testing.T) (fe apis.Client, teardown func()) {
 		teardown9, address, err := rpc.PublishFrontend(fen, "127.0.0.1:0")
 		assert.NoError(t, err)
 
-		assert.NoError(t, etcdn.UpdateAddress(address))
+		assert.NoError(t, etcdn.UpdateAddress(address, apis.FRONTEND))
 		teardowns.Add(teardown8, func () {
 			teardown9(true)
 		})
