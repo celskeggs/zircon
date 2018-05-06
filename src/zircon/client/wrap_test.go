@@ -1,15 +1,15 @@
 package client
 
 import (
-	"testing"
-	"zircon/apis"
-	"zircon/frontend"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"zircon/util"
-	"zircon/rpc"
+	"testing"
+	"zircon/apis"
 	"zircon/chunkserver"
 	"zircon/etcd"
+	"zircon/frontend"
+	"zircon/rpc"
+	"zircon/util"
 )
 
 type MultiTeardown struct {
@@ -55,7 +55,7 @@ func PrepareNetworkedCluster(t *testing.T) (fe apis.Client, teardown func()) {
 
 	config := Configuration{}
 
-	for _, name := range []apis.ServerName{ "fe0", "fe1", "fe2" } {
+	for _, name := range []apis.ServerName{"fe0", "fe1", "fe2"} {
 		etcdn, teardown8 := etcds(name)
 
 		fen, err := frontend.ConstructFrontendOnNetwork(etcdn, cache)
@@ -64,7 +64,7 @@ func PrepareNetworkedCluster(t *testing.T) (fe apis.Client, teardown func()) {
 		assert.NoError(t, err)
 
 		assert.NoError(t, etcdn.UpdateAddress(address, apis.FRONTEND))
-		teardowns.Add(teardown8, func () {
+		teardowns.Add(teardown8, func() {
 			teardown9(true)
 		})
 

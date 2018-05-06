@@ -4,6 +4,7 @@ type MetadataID uint64
 
 type Metametadata struct {
 	MetaID    MetadataID
+	Chunk     ChunkNum // The chunk the metadata block is present on
 	Version   Version
 	Locations []ServerName
 }
@@ -15,13 +16,25 @@ type MetadataEntry struct {
 	Replicas            []ServerID
 }
 
+// Size of a metadata entry in bytes
+const EntrySize = 128
+
+// Number of entries per block in bits
+const EntriesPerBlock = 15
+
+// Size of the chunk bitset in bytes
+const BitsetSize = 4096
+
 type MetadataCache interface {
 	// Allocate a new metadata entry and corresponding chunk number
 	NewEntry() (ChunkNum, error)
 	// Reads the metadata entry of a particular chunk.
-	ReadEntry(chunk ChunkNum) (MetadataEntry, error)
+	// If another server holds the lease on the metametadata the entry belongs to, returns it's name
+	ReadEntry(chunk ChunkNum) (MetadataEntry, ServerName, error)
 	// Update the metadate entry of a particular chunk.
-	UpdateEntry(chunk ChunkNum, previousEntry MetadataEntry, newEntry MetadataEntry) error
+	// If another server holds the lease on the metametadata the entry belongs to, returns it's name
+	UpdateEntry(chunk ChunkNum, previousEntry MetadataEntry, newEntry MetadataEntry) (ServerName, error)
 	// Delete a metadata entry and allow the garbage collection of the underlying chunks
-	DeleteEntry(chunk ChunkNum) error
+	// If another server holds the lease on the metametadata the entry belongs to, returns it's name
+	DeleteEntry(chunk ChunkNum) (ServerName, error)
 }

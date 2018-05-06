@@ -56,10 +56,10 @@ func TestMetadataCache_ReadEntry(t *testing.T) {
 		MostRecentVersion:   900,
 		LastConsumedVersion: 900,
 		Replicas:            []apis.ServerID{0, 1, 555555},
-	}, nil)
-	mocked.On("ReadEntry", apis.ChunkNum(0)).Return(apis.MetadataEntry{}, errors.New("metadatacache error 2"))
+	}, apis.ServerName(""), nil)
+	mocked.On("ReadEntry", apis.ChunkNum(0)).Return(apis.MetadataEntry{}, apis.ServerName(""), errors.New("metadatacache error 2"))
 
-	version, err := server.ReadEntry(556)
+	version, _, err := server.ReadEntry(556)
 	assert.NoError(t, err)
 	assert.Equal(t, apis.MetadataEntry{
 		MostRecentVersion:   900,
@@ -67,7 +67,7 @@ func TestMetadataCache_ReadEntry(t *testing.T) {
 		Replicas:            []apis.ServerID{0, 1, 555555},
 	}, version)
 
-	_, err = server.ReadEntry(0)
+	_, _, err = server.ReadEntry(0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "metadatacache error 2")
 }
@@ -84,16 +84,16 @@ func TestMetadataCache_UpdateEntry(t *testing.T) {
 			MostRecentVersion:   901,
 			LastConsumedVersion: 901,
 			Replicas:            []apis.ServerID{5, 88, 71},
-		}).Return(nil)
+		}).Return(apis.ServerName(""), nil)
 	mocked.On("UpdateEntry", apis.ChunkNum(0),
 		apis.MetadataEntry{
 			Replicas: []apis.ServerID{},
 		},
 		apis.MetadataEntry{
 			Replicas: []apis.ServerID{},
-		}).Return(errors.New("metadatacache error 3"))
+		}).Return(apis.ServerName(""), errors.New("metadatacache error 3"))
 
-	err := server.UpdateEntry(557, apis.MetadataEntry{},
+	_, err := server.UpdateEntry(557, apis.MetadataEntry{},
 		apis.MetadataEntry{
 			MostRecentVersion:   901,
 			LastConsumedVersion: 901,
@@ -101,7 +101,7 @@ func TestMetadataCache_UpdateEntry(t *testing.T) {
 		})
 	assert.NoError(t, err)
 
-	err = server.UpdateEntry(0, apis.MetadataEntry{}, apis.MetadataEntry{})
+	_, err = server.UpdateEntry(0, apis.MetadataEntry{}, apis.MetadataEntry{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "metadatacache error 3")
 }
@@ -110,13 +110,13 @@ func TestMetadataCache_DeleteEntry(t *testing.T) {
 	mocked, teardown, server := beginMetadataCacheTest(t)
 	defer teardown()
 
-	mocked.On("DeleteEntry", apis.ChunkNum(558)).Return(nil)
-	mocked.On("DeleteEntry", apis.ChunkNum(0)).Return(errors.New("metadatacache error 4"))
+	mocked.On("DeleteEntry", apis.ChunkNum(558)).Return(apis.ServerName(""), nil)
+	mocked.On("DeleteEntry", apis.ChunkNum(0)).Return(apis.ServerName(""), errors.New("metadatacache error 4"))
 
-	err := server.DeleteEntry(558)
+	_, err := server.DeleteEntry(558)
 	assert.NoError(t, err)
 
-	err = server.DeleteEntry(0)
+	_, err = server.DeleteEntry(0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "metadatacache error 4")
 }
