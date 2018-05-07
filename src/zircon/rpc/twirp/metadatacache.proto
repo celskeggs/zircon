@@ -25,6 +25,7 @@ message MetadataCache_ReadEntry {
 message MetadataCache_ReadEntry_Result {
     MetadataEntry entry = 1;
     string owner = 2;
+    string ownerErr = 3;
 }
 
 message MetadataCache_UpdateEntry {
@@ -35,14 +36,17 @@ message MetadataCache_UpdateEntry {
 
 message MetadataCache_UpdateEntry_Result {
     string owner = 1;
+    string ownerErr = 2;
 }
 
 message MetadataCache_DeleteEntry {
     uint64 chunk = 1;
+    MetadataEntry previousEntry = 2;
 }
 
 message MetadataCache_DeleteEntry_Result {
     string owner = 1;
+    string ownerErr = 2;
 }
 
 message MetadataEntry {

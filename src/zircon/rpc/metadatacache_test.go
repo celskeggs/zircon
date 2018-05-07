@@ -54,22 +54,29 @@ func TestMetadataCache_ReadEntry(t *testing.T) {
 
 	mocked.On("ReadEntry", apis.ChunkNum(556)).Return(apis.MetadataEntry{
 		MostRecentVersion:   900,
-		LastConsumedVersion: 900,
+		LastConsumedVersion: 910,
 		Replicas:            []apis.ServerID{0, 1, 555555},
 	}, apis.ServerName(""), nil)
-	mocked.On("ReadEntry", apis.ChunkNum(0)).Return(apis.MetadataEntry{}, apis.ServerName(""), errors.New("metadatacache error 2"))
+	mocked.On("ReadEntry", apis.ChunkNum(1)).Return(apis.MetadataEntry{}, apis.ServerName("owner"), errors.New("metadatacache error 2a"))
+	mocked.On("ReadEntry", apis.ChunkNum(0)).Return(apis.MetadataEntry{}, apis.ServerName(""), errors.New("metadatacache error 2b"))
 
 	version, _, err := server.ReadEntry(556)
 	assert.NoError(t, err)
 	assert.Equal(t, apis.MetadataEntry{
 		MostRecentVersion:   900,
-		LastConsumedVersion: 900,
+		LastConsumedVersion: 910,
 		Replicas:            []apis.ServerID{0, 1, 555555},
 	}, version)
 
-	_, _, err = server.ReadEntry(0)
+	_, owner, err := server.ReadEntry(1)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "metadatacache error 2")
+	assert.Equal(t, apis.ServerName("owner"), owner)
+	assert.Contains(t, err.Error(), "metadatacache error 2a")
+
+	_, owner, err = server.ReadEntry(0)
+	assert.Error(t, err)
+	assert.Equal(t, apis.ServerName(""), owner)
+	assert.Contains(t, err.Error(), "metadatacache error 2b")
 }
 
 func TestMetadataCache_UpdateEntry(t *testing.T) {
@@ -82,7 +89,7 @@ func TestMetadataCache_UpdateEntry(t *testing.T) {
 		},
 		apis.MetadataEntry{
 			MostRecentVersion:   901,
-			LastConsumedVersion: 901,
+			LastConsumedVersion: 911,
 			Replicas:            []apis.ServerID{5, 88, 71},
 		}).Return(apis.ServerName(""), nil)
 	mocked.On("UpdateEntry", apis.ChunkNum(0),
@@ -91,32 +98,64 @@ func TestMetadataCache_UpdateEntry(t *testing.T) {
 		},
 		apis.MetadataEntry{
 			Replicas: []apis.ServerID{},
-		}).Return(apis.ServerName(""), errors.New("metadatacache error 3"))
+		}).Return(apis.ServerName("test.mit.edu"), errors.New("metadatacache error 3a"))
+	mocked.On("UpdateEntry", apis.ChunkNum(1),
+		apis.MetadataEntry{
+			Replicas: []apis.ServerID{},
+		},
+		apis.MetadataEntry{
+			Replicas: []apis.ServerID{},
+		}).Return(apis.ServerName(""), errors.New("metadatacache error 3b"))
 
 	_, err := server.UpdateEntry(557, apis.MetadataEntry{},
 		apis.MetadataEntry{
 			MostRecentVersion:   901,
-			LastConsumedVersion: 901,
+			LastConsumedVersion: 911,
 			Replicas:            []apis.ServerID{5, 88, 71},
 		})
 	assert.NoError(t, err)
 
-	_, err = server.UpdateEntry(0, apis.MetadataEntry{}, apis.MetadataEntry{})
+	owner, err := server.UpdateEntry(0, apis.MetadataEntry{}, apis.MetadataEntry{})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "metadatacache error 3")
+	assert.Equal(t, apis.ServerName("test.mit.edu"), owner)
+	assert.Contains(t, err.Error(), "metadatacache error 3a")
+
+	owner, err = server.UpdateEntry(1, apis.MetadataEntry{}, apis.MetadataEntry{})
+	assert.Error(t, err)
+	assert.Equal(t, apis.ServerName(""), owner)
+	assert.Contains(t, err.Error(), "metadatacache error 3b")
 }
 
 func TestMetadataCache_DeleteEntry(t *testing.T) {
 	mocked, teardown, server := beginMetadataCacheTest(t)
 	defer teardown()
 
-	mocked.On("DeleteEntry", apis.ChunkNum(558)).Return(apis.ServerName(""), nil)
-	mocked.On("DeleteEntry", apis.ChunkNum(0)).Return(apis.ServerName(""), errors.New("metadatacache error 4"))
+	mocked.On("DeleteEntry", apis.ChunkNum(558), apis.MetadataEntry{
+		MostRecentVersion: 902,
+		LastConsumedVersion: 912,
+		Replicas: []apis.ServerID{59, 1, 91},
+	}).Return(apis.ServerName(""), nil)
+	mocked.On("DeleteEntry", apis.ChunkNum(2), apis.MetadataEntry{
+		Replicas: []apis.ServerID{},
+	}).Return(apis.ServerName("abc.example.com"), errors.New("metadatacache error 4a"))
+	mocked.On("DeleteEntry", apis.ChunkNum(0), apis.MetadataEntry{
+		Replicas: []apis.ServerID{},
+	}).Return(apis.ServerName(""), errors.New("metadatacache error 4b"))
 
-	_, err := server.DeleteEntry(558)
+	_, err := server.DeleteEntry(558, apis.MetadataEntry{
+		MostRecentVersion: 902,
+		LastConsumedVersion: 912,
+		Replicas: []apis.ServerID{59, 1, 91},
+	})
 	assert.NoError(t, err)
 
-	_, err = server.DeleteEntry(0)
+	owner, err := server.DeleteEntry(2, apis.MetadataEntry{})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "metadatacache error 4")
+	assert.Equal(t, apis.ServerName("abc.example.com"), owner)
+	assert.Contains(t, err.Error(), "metadatacache error 4a")
+
+	owner, err = server.DeleteEntry(0, apis.MetadataEntry{})
+	assert.Error(t, err)
+	assert.Equal(t, apis.ServerName(""), owner)
+	assert.Contains(t, err.Error(), "metadatacache error 4b")
 }

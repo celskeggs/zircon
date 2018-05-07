@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"zircon/apis"
 	"zircon/rpc/twirp"
+	"errors"
 )
 
 // Connects to an RPC handler for a MetadataCache on a certain address.
@@ -38,8 +39,12 @@ func (p *proxyMetadataCacheAsTwirp) NewEntry(ctx context.Context, request *twirp
 func (p *proxyMetadataCacheAsTwirp) ReadEntry(ctx context.Context, request *twirp.MetadataCache_ReadEntry) (*twirp.MetadataCache_ReadEntry_Result, error) {
 	entry, owner, err := p.server.ReadEntry(apis.ChunkNum(request.Chunk))
 	if err != nil {
+		if owner == "" {
+			return nil, err
+		}
 		return &twirp.MetadataCache_ReadEntry_Result{
 			Owner: string(owner),
+			OwnerErr: err.Error(),
 		}, nil
 	}
 	return &twirp.MetadataCache_ReadEntry_Result{
@@ -61,13 +66,29 @@ func (p *proxyMetadataCacheAsTwirp) UpdateEntry(ctx context.Context, request *tw
 		LastConsumedVersion: apis.Version(request.NewEntry.LastConsumedVersion),
 		Replicas:            IntArrayToIDArray(request.NewEntry.ServerIDs),
 	})
+	if owner != "" {
+		return &twirp.MetadataCache_UpdateEntry_Result{
+			Owner: string(owner),
+			OwnerErr: err.Error(),
+		}, nil
+	}
 	return &twirp.MetadataCache_UpdateEntry_Result{
 		Owner: string(owner),
 	}, err
 }
 
 func (p *proxyMetadataCacheAsTwirp) DeleteEntry(ctx context.Context, request *twirp.MetadataCache_DeleteEntry) (*twirp.MetadataCache_DeleteEntry_Result, error) {
-	owner, err := p.server.DeleteEntry(apis.ChunkNum(request.Chunk))
+	owner, err := p.server.DeleteEntry(apis.ChunkNum(request.Chunk), apis.MetadataEntry{
+		MostRecentVersion: apis.Version(request.PreviousEntry.MostRecentVersion),
+		LastConsumedVersion: apis.Version(request.PreviousEntry.LastConsumedVersion),
+		Replicas: IntArrayToIDArray(request.PreviousEntry.ServerIDs),
+	})
+	if owner != "" {
+		return &twirp.MetadataCache_DeleteEntry_Result{
+			Owner: string(owner),
+			OwnerErr: err.Error(),
+		}, nil
+	}
 	return &twirp.MetadataCache_DeleteEntry_Result{
 		Owner: string(owner),
 	}, err
@@ -90,7 +111,10 @@ func (p *proxyTwirpAsMetadataCache) ReadEntry(chunk apis.ChunkNum) (apis.Metadat
 		Chunk: uint64(chunk),
 	})
 	if err != nil {
-		return apis.MetadataEntry{}, apis.ServerName(result.Owner), err
+		return apis.MetadataEntry{}, "", err
+	}
+	if result.Owner != "" {
+		return apis.MetadataEntry{}, apis.ServerName(result.Owner), errors.New(result.OwnerErr)
 	}
 	return apis.MetadataEntry{
 		MostRecentVersion:   apis.Version(result.Entry.MostRecentVersion),
@@ -113,12 +137,23 @@ func (p *proxyTwirpAsMetadataCache) UpdateEntry(chunk apis.ChunkNum, previousEnt
 			ServerIDs:           IDArrayToIntArray(newEntry.Replicas),
 		},
 	})
-	return apis.ServerName(result.Owner), err
+	if result.Owner != "" {
+		return apis.ServerName(result.Owner), errors.New(result.OwnerErr)
+	}
+	return "", err
 }
 
-func (p *proxyTwirpAsMetadataCache) DeleteEntry(chunk apis.ChunkNum) (apis.ServerName, error) {
+func (p *proxyTwirpAsMetadataCache) DeleteEntry(chunk apis.ChunkNum, previous apis.MetadataEntry) (apis.ServerName, error) {
 	result, err := p.server.DeleteEntry(context.Background(), &twirp.MetadataCache_DeleteEntry{
 		Chunk: uint64(chunk),
+		PreviousEntry: &twirp.MetadataEntry{
+			LastConsumedVersion: uint64(previous.LastConsumedVersion),
+			MostRecentVersion: uint64(previous.MostRecentVersion),
+			ServerIDs: IDArrayToIntArray(previous.Replicas),
+		},
 	})
+	if result.Owner != "" {
+		return apis.ServerName(result.Owner), errors.New(result.OwnerErr)
+	}
 	return apis.ServerName(result.Owner), err
 }
