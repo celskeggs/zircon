@@ -10,7 +10,7 @@ type Client interface {
 	// Read part or all of the contents of a chunk. offset + length cannot exceed MaxChunkSize.
 	// Returns the data read and the version of the data read. The version can be used with Write.
 	// If the chunk does not exist, returns an error.
-	Read(ref ChunkNum, offset Offset, length Length) ([]byte, Version, error)
+	Read(ref ChunkNum, offset uint32, length uint32) ([]byte, Version, error)
 
 	// Write part or all of the contents of a chunk. offset + len(data) cannot exceed MaxChunkSize.
 	// Takes a version; if the version is not AnyVersion and doesn't match the latest version of the chunk, the write is
@@ -19,7 +19,7 @@ type Client interface {
 	// staleness.
 	// If the chunk does not exist, returns an error. If this fails for any reason, there must be no visible change to
 	// the underlying data. If this fails for a reason besides staleness, the version must be zero.
-	Write(ref ChunkNum, offset Offset, version Version, data []byte) (Version, error)
+	Write(ref ChunkNum, offset uint32, version Version, data []byte) (Version, error)
 
 	// Destroy a chunk, given a specific version number. Version checking works the same as for Write.
 	// If the chunk does not exist, returns an error.

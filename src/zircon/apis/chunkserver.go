@@ -3,12 +3,6 @@ package apis
 // The version number of a chunk
 type Version uint64
 
-// An offset within a chunk
-type Offset uint32
-
-// A length of data within a chunk
-type Length uint32
-
 // A chunk identifier, not directly exposed to normal clients
 type ChunkNum uint64
 
@@ -16,7 +10,7 @@ type ChunkNum uint64
 const ChunkNumSize = 64
 
 // 8 MiB, the maximum size of a chunk stored on the chunkserver
-const MaxChunkSize Length = 8 * 1024 * 1024
+const MaxChunkSize = 8 * 1024 * 1024
 
 // Represents "any version is valid" when passed as a chunk version number
 const AnyVersion Version = 0
@@ -28,7 +22,7 @@ type Chunkserver interface {
 	// Version of StartWrite that can also forward this data to other chunkservers, to optimize for client bandwidth.
 	// If replicas is nonempty, this will also replicate the prepared write to those servers.
 	// Additionally fails if another server fails to start a write.
-	StartWriteReplicated(chunk ChunkNum, offset Offset, data []byte, replicas []ServerAddress) error
+	StartWriteReplicated(chunk ChunkNum, offset uint32, data []byte, replicas []ServerAddress) error
 
 	// Tells this chunkserver to directly replicate a particular chunk to another specified chunkserver.
 	// This will use 'subref' to call 'Add' on the other chunkserver at 'serverAddress'.
@@ -50,13 +44,13 @@ type ChunkserverSingle interface {
 	// the same number of bytes requested, unless an error condition is signaled.
 	// The version of the data actually read will be returned.
 	// Fails if a copy of this chunk isn't located on this chunkserver.
-	Read(chunk ChunkNum, offset Offset, length Length, minimum Version) ([]byte, Version, error)
+	Read(chunk ChunkNum, offset uint32, length uint32, minimum Version) ([]byte, Version, error)
 
 	// Given a chunk reference, send data to be used for a write to this chunk.
 	// This method does not actually perform a write.
 	// The sum of 'offset' and 'len(data)' must not be greater than MaxChunkSize.
 	// Fails if a copy of this chunk isn't located on this chunkserver.
-	StartWrite(chunk ChunkNum, offset Offset, data []byte) error
+	StartWrite(chunk ChunkNum, offset uint32, data []byte) error
 
 	// Commit a write -- persistently store it as the data for a particular version.
 	// Takes existing saved data for oldVersion, apply this cached write, and saved it as newVersion.

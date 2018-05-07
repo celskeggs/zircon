@@ -30,9 +30,9 @@ func TestChunkserver_StartWriteReplicated(t *testing.T) {
 	mocked, teardown, server := beginChunkserverTest(t)
 	defer teardown()
 
-	mocked.On("StartWriteReplicated", apis.ChunkNum(73), apis.Offset(55), []byte("this is a hello\000 world!!\n"),
+	mocked.On("StartWriteReplicated", apis.ChunkNum(73), uint32(55), []byte("this is a hello\000 world!!\n"),
 		[]apis.ServerAddress{"abc", "def", "ghi.mit.edu"}).Return(nil)
-	mocked.On("StartWriteReplicated", apis.ChunkNum(0), apis.Offset(0), []byte("|||"),
+	mocked.On("StartWriteReplicated", apis.ChunkNum(0), uint32(0), []byte("|||"),
 		[]apis.ServerAddress{}).Return(errors.New("hello world 01"))
 
 	err := server.StartWriteReplicated(73, 55, []byte("this is a hello\000 world!!\n"),
@@ -62,8 +62,8 @@ func TestChunkserver_Read(t *testing.T) {
 	mocked, teardown, server := beginChunkserverTest(t)
 	defer teardown()
 
-	mocked.On("Read", apis.ChunkNum(75), apis.Offset(57), apis.Length(58), apis.Version(59)).Return([]byte("testy testy"), apis.Version(60), nil)
-	mocked.On("Read", apis.ChunkNum(0), apis.Offset(0), apis.Length(0), apis.Version(0)).Return(nil, apis.Version(6), errors.New("hello world 03"))
+	mocked.On("Read", apis.ChunkNum(75), uint32(57), uint32(58), apis.Version(59)).Return([]byte("testy testy"), apis.Version(60), nil)
+	mocked.On("Read", apis.ChunkNum(0), uint32(0), uint32(0), apis.Version(0)).Return(nil, apis.Version(6), errors.New("hello world 03"))
 
 	data, ver, err := server.Read(75, 57, 58, 59)
 	assert.NoError(t, err)
@@ -80,8 +80,8 @@ func TestChunkserver_StartWrite(t *testing.T) {
 	mocked, teardown, server := beginChunkserverTest(t)
 	defer teardown()
 
-	mocked.On("StartWrite", apis.ChunkNum(76), apis.Offset(61), []byte("phenomenologist")).Return(nil)
-	mocked.On("StartWrite", apis.ChunkNum(0), apis.Offset(0), []byte(nil)).Return(errors.New("hello world 04"))
+	mocked.On("StartWrite", apis.ChunkNum(76), uint32(61), []byte("phenomenologist")).Return(nil)
+	mocked.On("StartWrite", apis.ChunkNum(0), uint32(0), []byte(nil)).Return(errors.New("hello world 04"))
 
 	assert.NoError(t, server.StartWrite(76, 61, []byte("phenomenologist")))
 

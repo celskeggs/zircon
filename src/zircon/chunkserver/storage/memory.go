@@ -82,7 +82,7 @@ func (m *MemoryStorage) ReadVersion(chunk apis.ChunkNum, version apis.Version) (
 
 func (m *MemoryStorage) WriteVersion(chunk apis.ChunkNum, version apis.Version, data []byte) error {
 	m.assertOpen()
-	if apis.Length(len(data)) > apis.MaxChunkSize {
+	if len(data) > apis.MaxChunkSize {
 		return fmt.Errorf("chunk is too large: %d/%s = data[%d]", chunk, version, len(data))
 	}
 	versionMap := m.chunks[chunk]

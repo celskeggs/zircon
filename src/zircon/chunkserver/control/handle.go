@@ -12,7 +12,7 @@ import (
 type Teardown func()
 
 type commit struct {
-	Offset apis.Offset
+	Offset uint32
 	Data   []byte
 }
 
@@ -185,11 +185,11 @@ func (cs *chunkserver) Teardown() {
 // the same number of bytes requested if there is no error.
 // The version of the data actually read will be returned.
 // Fails if a copy of this chunk isn't located on this chunkserver.
-func (cs *chunkserver) Read(chunk apis.ChunkNum, offset apis.Offset, length apis.Length, minimum apis.Version) ([]byte, apis.Version, error) {
+func (cs *chunkserver) Read(chunk apis.ChunkNum, offset uint32, length uint32, minimum apis.Version) ([]byte, apis.Version, error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	if apis.Length(offset)+length > apis.MaxChunkSize {
+	if offset+length > apis.MaxChunkSize {
 		return nil, 0, errors.New("too much data")
 	}
 
@@ -219,7 +219,7 @@ func (cs *chunkserver) Read(chunk apis.ChunkNum, offset apis.Offset, length apis
 // This method does not actually perform a write.
 // The sum of 'offset' and 'len(data)' must not be greater than MaxChunkSize.
 // Fails if a copy of this chunk isn't located on this chunkserver.
-func (cs *chunkserver) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data []byte) error {
+func (cs *chunkserver) StartWrite(chunk apis.ChunkNum, offset uint32, data []byte) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
@@ -233,7 +233,7 @@ func (cs *chunkserver) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data 
 	}
 
 	cs.Hashes[apis.CalculateCommitHash(offset, data)] = struct {
-		Offset apis.Offset
+		Offset uint32
 		Data   []byte
 	}{Offset: offset, Data: data}
 

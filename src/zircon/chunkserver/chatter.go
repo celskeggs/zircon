@@ -32,11 +32,11 @@ func (w *wrapper) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	return w.Single.Delete(chunk, version)
 }
 
-func (w *wrapper) Read(chunk apis.ChunkNum, offset apis.Offset, length apis.Length, minimum apis.Version) ([]byte, apis.Version, error) {
+func (w *wrapper) Read(chunk apis.ChunkNum, offset uint32, length uint32, minimum apis.Version) ([]byte, apis.Version, error) {
 	return w.Single.Read(chunk, offset, length, minimum)
 }
 
-func (w *wrapper) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data []byte) error {
+func (w *wrapper) StartWrite(chunk apis.ChunkNum, offset uint32, data []byte) error {
 	return w.Single.StartWrite(chunk, offset, data)
 }
 
@@ -48,7 +48,7 @@ func (w *wrapper) UpdateLatestVersion(chunk apis.ChunkNum, oldVersion apis.Versi
 	return w.Single.UpdateLatestVersion(chunk, oldVersion, newVersion)
 }
 
-func (w *wrapper) StartWriteReplicated(chunk apis.ChunkNum, offset apis.Offset, data []byte, replicas []apis.ServerAddress) error {
+func (w *wrapper) StartWriteReplicated(chunk apis.ChunkNum, offset uint32, data []byte, replicas []apis.ServerAddress) error {
 	if err := w.Single.StartWrite(chunk, offset, data); err != nil {
 		return err
 	}

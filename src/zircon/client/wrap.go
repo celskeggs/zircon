@@ -53,11 +53,11 @@ func (c *clientWithCloseCallback) New() (apis.ChunkNum, error) {
 	return c.base.New()
 }
 
-func (c *clientWithCloseCallback) Read(ref apis.ChunkNum, offset apis.Offset, length apis.Length) ([]byte, apis.Version, error) {
+func (c *clientWithCloseCallback) Read(ref apis.ChunkNum, offset uint32, length uint32) ([]byte, apis.Version, error) {
 	return c.base.Read(ref, offset, length)
 }
 
-func (c *clientWithCloseCallback) Write(ref apis.ChunkNum, offset apis.Offset, version apis.Version, data []byte) (apis.Version, error) {
+func (c *clientWithCloseCallback) Write(ref apis.ChunkNum, offset uint32, version apis.Version, data []byte) (apis.Version, error) {
 	return c.base.Write(ref, offset, version, data)
 }
 

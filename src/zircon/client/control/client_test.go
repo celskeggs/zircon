@@ -382,7 +382,7 @@ func TestCleanup(t *testing.T) {
 	assert.NoError(t, err)
 
 	ver, err := client.Write(chunk, 0, apis.AnyVersion, []byte("begin;"))
-	offset := apis.Offset(len("begin;"))
+	offset := uint32(len("begin;"))
 	assert.NoError(t, err)
 
 	initial := usage()
@@ -391,7 +391,7 @@ func TestCleanup(t *testing.T) {
 		entry := fmt.Sprintf("entry %d;", i)
 		newver, err := client.Write(chunk, offset, ver, []byte(entry))
 		assert.NoError(t, err)
-		offset += apis.Offset(len(entry))
+		offset += uint32(len(entry))
 		ver = newver
 	}
 

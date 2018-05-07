@@ -240,7 +240,7 @@ func (mc *metadatacache) findFreeChunkBitset() (apis.ChunkNum, apis.Metametadata
 	// Should never return -1 as an error because of the earlier check
 	bitI := findFirstZero(cell)
 	// TODO: what does this 64 do?
-	chunk := apis.ChunkNum(cellI * 64 + uint(bitI))
+	chunk := apis.ChunkNum(cellI*64 + uint(bitI))
 	return chunk, metadataOut, nil
 }
 
@@ -473,7 +473,7 @@ func (mc *metadatacache) flushCache() {
 }
 
 // Compute the metadata block, and offset within the block, that a certain chunk belongs to
-func chunkToBlockAndOffset(chunk apis.ChunkNum) (apis.MetadataID, apis.Offset) {
+func chunkToBlockAndOffset(chunk apis.ChunkNum) (apis.MetadataID, uint32) {
 	return chunkToBlockID(chunk), entryNumberToOffset(chunkToEntryNumber(chunk))
 }
 
@@ -483,18 +483,18 @@ func chunkToBlockID(chunk apis.ChunkNum) apis.MetadataID {
 }
 
 // Compute the offset within its metadata block where a chunk should be able to be found
-func chunkToEntryNumber(chunk apis.ChunkNum) uint {
+func chunkToEntryNumber(chunk apis.ChunkNum) uint32 {
 	// Calculate the number of bits corresponding the block number
-	var blockBits uint = apis.ChunkNumSize - apis.EntriesPerBlock
+	var blockBits uint32 = apis.ChunkNumSize - apis.EntriesPerBlock
 	// Zero out those bits
 	entryNumber := (chunk << blockBits) >> blockBits
 
-	return uint(entryNumber)
+	return uint32(entryNumber)
 }
 
 // Calculate the offset of the metadata entry inside of the block in bytes
-func entryNumberToOffset(entryN uint) apis.Offset {
-	return apis.Offset(entryN*apis.EntrySize + apis.BitsetSize)
+func entryNumberToOffset(entryN uint32) uint32 {
+	return entryN*apis.EntrySize + apis.BitsetSize
 }
 
 func entryAndBlockToChunkNum(entryN uint, block apis.MetadataID) apis.ChunkNum {

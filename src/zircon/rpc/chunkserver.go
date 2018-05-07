@@ -27,7 +27,7 @@ type proxyChunkserverAsTwirp struct {
 }
 
 func (p *proxyChunkserverAsTwirp) StartWriteReplicated(context context.Context, input *twirp.Chunkserver_StartWriteReplicated) (*twirp.Nothing, error) {
-	err := p.server.StartWriteReplicated(apis.ChunkNum(input.Chunk), apis.Offset(input.Offset), input.Data, StringArrayToAddressArray(input.Addresses))
+	err := p.server.StartWriteReplicated(apis.ChunkNum(input.Chunk), input.Offset, input.Data, StringArrayToAddressArray(input.Addresses))
 	return &twirp.Nothing{}, err
 }
 
@@ -37,7 +37,7 @@ func (p *proxyChunkserverAsTwirp) Replicate(context context.Context, input *twir
 }
 
 func (p *proxyChunkserverAsTwirp) Read(context context.Context, input *twirp.Chunkserver_Read) (*twirp.Chunkserver_Read_Result, error) {
-	data, version, err := p.server.Read(apis.ChunkNum(input.Chunk), apis.Offset(input.Offset), apis.Length(input.Length), apis.Version(input.Version))
+	data, version, err := p.server.Read(apis.ChunkNum(input.Chunk), input.Offset, input.Length, apis.Version(input.Version))
 	message := ""
 	if err != nil {
 		message = err.Error()
@@ -53,7 +53,7 @@ func (p *proxyChunkserverAsTwirp) Read(context context.Context, input *twirp.Chu
 }
 
 func (p *proxyChunkserverAsTwirp) StartWrite(context context.Context, input *twirp.Chunkserver_StartWrite) (*twirp.Nothing, error) {
-	err := p.server.StartWrite(apis.ChunkNum(input.Chunk), apis.Offset(input.Offset), input.Data)
+	err := p.server.StartWrite(apis.ChunkNum(input.Chunk), input.Offset, input.Data)
 	return &twirp.Nothing{}, err
 }
 
@@ -98,12 +98,12 @@ type proxyTwirpAsChunkserver struct {
 	server twirp.Chunkserver
 }
 
-func (p *proxyTwirpAsChunkserver) StartWriteReplicated(chunk apis.ChunkNum, offset apis.Offset, data []byte,
+func (p *proxyTwirpAsChunkserver) StartWriteReplicated(chunk apis.ChunkNum, offset uint32, data []byte,
 	replicas []apis.ServerAddress) error {
 
 	_, err := p.server.StartWriteReplicated(context.Background(), &twirp.Chunkserver_StartWriteReplicated{
 		Chunk:     uint64(chunk),
-		Offset:    uint32(offset),
+		Offset:    offset,
 		Data:      data,
 		Addresses: AddressArrayToStringArray(replicas),
 	})
@@ -120,11 +120,11 @@ func (p *proxyTwirpAsChunkserver) Replicate(chunk apis.ChunkNum, serverAddress a
 	return err
 }
 
-func (p *proxyTwirpAsChunkserver) Read(chunk apis.ChunkNum, offset apis.Offset, length apis.Length, minimum apis.Version) ([]byte, apis.Version, error) {
+func (p *proxyTwirpAsChunkserver) Read(chunk apis.ChunkNum, offset uint32, length uint32, minimum apis.Version) ([]byte, apis.Version, error) {
 	result, err := p.server.Read(context.Background(), &twirp.Chunkserver_Read{
 		Chunk:   uint64(chunk),
-		Offset:  uint32(offset),
-		Length:  uint32(length),
+		Offset:  offset,
+		Length:  length,
 		Version: uint64(minimum),
 	})
 	if err != nil {
@@ -136,10 +136,10 @@ func (p *proxyTwirpAsChunkserver) Read(chunk apis.ChunkNum, offset apis.Offset, 
 	return result.Data, apis.Version(result.Version), nil
 }
 
-func (p *proxyTwirpAsChunkserver) StartWrite(chunk apis.ChunkNum, offset apis.Offset, data []byte) error {
+func (p *proxyTwirpAsChunkserver) StartWrite(chunk apis.ChunkNum, offset uint32, data []byte) error {
 	_, err := p.server.StartWrite(context.Background(), &twirp.Chunkserver_StartWrite{
 		Chunk:  uint64(chunk),
-		Offset: uint32(offset),
+		Offset: offset,
 		Data:   data,
 	})
 	return err

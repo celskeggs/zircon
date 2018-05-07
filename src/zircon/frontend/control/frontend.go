@@ -101,7 +101,7 @@ func (f *frontend) New() (apis.ChunkNum, error) {
 	if err != nil {
 		return 0, err
 	}
-	err = mc.UpdateEntry(chunk, apis.MetadataEntry{}, apis.MetadataEntry{
+	_, err = mc.UpdateEntry(chunk, apis.MetadataEntry{}, apis.MetadataEntry{
 		MostRecentVersion:   0,
 		LastConsumedVersion: 0,
 		Replicas:            replicas,
@@ -152,7 +152,7 @@ func (f *frontend) ReadMetadataEntry(chunk apis.ChunkNum) (apis.Version, []apis.
 	if err != nil {
 		return 0, nil, err
 	}
-	entry, err := mc.ReadEntry(chunk)
+	entry, _, err := mc.ReadEntry(chunk)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -174,7 +174,7 @@ func (f *frontend) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash a
 	if err != nil {
 		return 0, err
 	}
-	entry, err := cache.ReadEntry(chunk)
+	entry, _, err := cache.ReadEntry(chunk)
 	if err != nil {
 		return 0, fmt.Errorf("while fetching metadata entry: %v", err)
 	}
@@ -197,7 +197,7 @@ func (f *frontend) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash a
 		entry.LastConsumedVersion = entry.MostRecentVersion
 	}
 	entry.LastConsumedVersion += 1
-	if err := cache.UpdateEntry(chunk, oldEntry, entry); err != nil {
+	if _, err := cache.UpdateEntry(chunk, oldEntry, entry); err != nil {
 		return 0, fmt.Errorf("while updating metadata entry: %v", err)
 	}
 	// Commit the write to the chunkservers
@@ -209,7 +209,7 @@ func (f *frontend) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash a
 	// Update the latest stored metadata version
 	oldEntry = entry
 	entry.MostRecentVersion = entry.LastConsumedVersion
-	if err := cache.UpdateEntry(chunk, oldEntry, entry); err != nil {
+	if _, err := cache.UpdateEntry(chunk, oldEntry, entry); err != nil {
 		return 0, fmt.Errorf("while updating metadata entry: %v", err)
 	}
 	// TODO: how to repair if a failure occurs right here
@@ -229,7 +229,7 @@ func (f *frontend) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	if err != nil {
 		return err
 	}
-	entry, err := cache.ReadEntry(chunk)
+	entry, _, err := cache.ReadEntry(chunk)
 	if err != nil {
 		return fmt.Errorf("while fetching metadata entry: %v", err)
 	}
@@ -237,7 +237,7 @@ func (f *frontend) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	oldEntry := entry
 	entry.MostRecentVersion = 0
 	entry.LastConsumedVersion += 1 // just in case it was still zero; this ensures that this is treated as "deleted" and not just "empty"
-	if err := cache.UpdateEntry(chunk, oldEntry, entry); err != nil {
+	if _, err := cache.UpdateEntry(chunk, oldEntry, entry); err != nil {
 		return fmt.Errorf("while updating metadata entry: %v", err)
 	}
 	// Next, we destroy all of the replica data
@@ -280,5 +280,6 @@ func (f *frontend) Delete(chunk apis.ChunkNum, version apis.Version) error {
 		}
 	}
 	// Now that all of the replica data is gone, we can get rid of the metadata
-	return f.metadata.DeleteEntry(chunk)
+	_, err = f.metadata.DeleteEntry(chunk)
+	return err
 }

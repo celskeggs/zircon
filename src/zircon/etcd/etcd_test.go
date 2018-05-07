@@ -2,12 +2,12 @@ package etcd
 
 import (
 	"context"
+	"fmt"
 	"github.com/coreos/etcd/clientv3"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 	"zircon/apis"
-	"fmt"
 )
 
 // Just to make sure that our mechanism of launching etcd actually works.

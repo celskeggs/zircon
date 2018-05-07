@@ -28,7 +28,7 @@ type Frontend interface {
 
 // Calculates a hash of a write. This is used to ensure that the same data has been replicated to all chunkservers,
 // without having to compare the entire message.
-func CalculateCommitHash(offset Offset, data []byte) CommitHash {
+func CalculateCommitHash(offset uint32, data []byte) CommitHash {
 	hashInput := fmt.Sprintf("%d %d %s", offset, len(data), string(data))
 	hashArray := sha256.Sum256([]byte(hashInput))
 	return CommitHash(hashArray[:])
