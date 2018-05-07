@@ -1,4 +1,4 @@
-package control
+package frontend
 
 import (
 	"zircon/apis"
@@ -15,11 +15,7 @@ type frontend struct {
 }
 
 // Construct a frontend server, not including metadata caches and service handlers.
-func ConstructFrontend(local apis.ServerAddress, etcd apis.EtcdInterface, cache rpc.ConnectionCache) (apis.Frontend, error) {
-	err := etcd.UpdateAddress(local, apis.FRONTEND)
-	if err != nil {
-		return nil, err
-	}
+func ConstructFrontend(etcd apis.EtcdInterface, cache rpc.ConnectionCache) (apis.Frontend, error) {
 	updater := chunkupdate.NewUpdater(cache, etcd, &reselectingMetadataUpdater{
 		etcd: etcd,
 		cache: cache,

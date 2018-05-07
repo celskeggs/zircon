@@ -1,4 +1,4 @@
-package control
+package frontend
 
 import (
 	"zircon/apis"
