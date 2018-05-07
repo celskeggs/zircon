@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 	"zircon/apis"
+	"fmt"
 )
 
 // Just to make sure that our mechanism of launching etcd actually works.
