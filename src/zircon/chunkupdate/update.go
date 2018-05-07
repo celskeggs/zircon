@@ -24,12 +24,12 @@ type Updater interface {
 }
 
 // Performs a read. 'connect' is a function that, given an address, returns a reference to the chunkserver at that address.
-func (ref *Reference) PerformRead(cache rpc.ConnectionCache, offset uint32, length uint32) ([]byte, error) {
+func (ref *Reference) PerformRead(cache rpc.ConnectionCache, offset uint32, length uint32) ([]byte, apis.Version, error) {
 	if offset + length > apis.MaxChunkSize {
-		return nil, errors.New("read too long")
+		return nil, 0, errors.New("read too long")
 	}
 	if len(ref.Replicas) == 0 {
-		return nil, errors.New("cannot perform read; there are no replicas")
+		return nil, 0, errors.New("cannot perform read; there are no replicas")
 	}
 	var lastInnerErr error
 	var lastOuterErr error
@@ -37,12 +37,12 @@ func (ref *Reference) PerformRead(cache rpc.ConnectionCache, offset uint32, leng
 	for _, ii := range rand.Perm(len(ref.Replicas)) {
 		cs, err := cache.SubscribeChunkserver(ref.Replicas[ii])
 		if err == nil {
-			data, _, err := cs.Read(ref.Chunk, offset, length, ref.Version)
+			data, realVersion, err := cs.Read(ref.Chunk, offset, length, ref.Version)
 			if err == nil {
 				if uint32(len(data)) != length {
 					panic("postcondition on chunkserver.Read(...) violated")
 				}
-				return data, nil
+				return data, realVersion, nil
 			} else {
 				lastInnerErr = err
 			}
@@ -52,9 +52,9 @@ func (ref *Reference) PerformRead(cache rpc.ConnectionCache, offset uint32, leng
 	}
 	// at this point, we were unsuccessful, and did not manage to read anything
 	if lastInnerErr != nil {
-		return nil, lastInnerErr
+		return nil, 0, lastInnerErr
 	} else if lastOuterErr != nil {
-		return nil, lastOuterErr
+		return nil, 0, lastOuterErr
 	} else {
 		panic("should have had an error if we failed")
 	}
@@ -86,28 +86,23 @@ type UpdaterMetadata interface {
 	DeleteEntry(chunk apis.ChunkNum, previous apis.MetadataEntry) error
 }
 
-type UpdaterChunkservers interface {
-	List() ([]apis.ServerID, error)
-	Address(chunkserver apis.ServerID) (apis.ServerAddress, error)
-}
-
 type updater struct {
-	mu           sync.Mutex
-	cache        rpc.ConnectionCache
-	metadata     UpdaterMetadata
-	chunkservers UpdaterChunkservers
+	mu       sync.Mutex
+	cache    rpc.ConnectionCache
+	metadata UpdaterMetadata
+	etcd     apis.EtcdInterface
 }
 
-func NewUpdater(cache rpc.ConnectionCache, metadata UpdaterMetadata, chunkservers UpdaterChunkservers) Updater {
+func NewUpdater(cache rpc.ConnectionCache, etcd apis.EtcdInterface, metadata UpdaterMetadata) Updater {
 	return &updater{
 		metadata: metadata,
 		cache: cache,
-		chunkservers: chunkservers,
+		etcd: etcd,
 	}
 }
 
 func (f *updater) selectInitialChunkservers(replicas int) ([]apis.ServerID, error) {
-	chunkservers, err := f.chunkservers.List()
+	chunkservers, err := ListChunkservers(f.etcd)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +147,7 @@ func (f *updater) New(replicaNum int) (apis.ChunkNum, error) {
 func (f *updater) getReplicaAddresses(entry apis.MetadataEntry) ([]apis.ServerAddress, error) {
 	addresses := make([]apis.ServerAddress, len(entry.Replicas))
 	for i, id := range entry.Replicas {
-		address, err := f.chunkservers.Address(id)
+		address, err := AddressForChunkserver(f.etcd, id)
 		if err != nil {
 			return nil, err
 		}

@@ -20,11 +20,9 @@ func ConstructFrontend(local apis.ServerAddress, etcd apis.EtcdInterface, cache 
 	if err != nil {
 		return nil, err
 	}
-	updater := chunkupdate.NewUpdater(cache, &reselectingMetadataUpdater{
+	updater := chunkupdate.NewUpdater(cache, etcd, &reselectingMetadataUpdater{
 		etcd: etcd,
 		cache: cache,
-	}, &chunkserverUpdater{
-		etcd: etcd,
 	})
 	return &frontend{
 		etcd: etcd,

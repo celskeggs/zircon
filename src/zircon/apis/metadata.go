@@ -1,19 +1,35 @@
 package apis
 
+// Note: the metadata chunk for metadata block N is stored in chunk N
+// Note: this means that there is NO METADATA BLOCK for 0! because that would be metametadata, which is stored in etcd.
 type MetadataID uint64
 
-type Metametadata struct {
-	MetaID    MetadataID
-	Chunk     ChunkNum // The chunk the metadata block is present on
-	Version   Version
-	Locations []ServerName
-}
+const MinMetadataRange MetadataID = 1
+const MaxMetadataRange MetadataID = 1024 // TODO: update this so that it's the actual <beginning of metablock 1>-1 offset
 
 type MetadataEntry struct {
 	// these two versions can be mismatched if a write was aborted.
 	MostRecentVersion   Version
 	LastConsumedVersion Version
 	Replicas            []ServerID
+}
+
+func (me MetadataEntry) Equals(other MetadataEntry) bool {
+	if me.MostRecentVersion != other.MostRecentVersion {
+		return false
+	}
+	if me.LastConsumedVersion != other.LastConsumedVersion {
+		return false
+	}
+	if len(me.Replicas) != len(other.Replicas) {
+		return false
+	}
+	for i, myReplica := range me.Replicas {
+		if other.Replicas[i] != myReplica {
+			return false
+		}
+	}
+	return true
 }
 
 // Size of a metadata entry in bytes
@@ -27,7 +43,7 @@ const BitsetSize = 4096
 
 // Returned by MetadataCache functions that could redirect the caller, to say that no, this error cannot be fixed by
 // trying again on another server.
-const NO_REDIRECT = ""
+const NoRedirect = ""
 
 type MetadataCache interface {
 	// Allocate a new metadata entry and corresponding chunk number

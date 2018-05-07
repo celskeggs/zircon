@@ -54,7 +54,7 @@ func (r *reselectingMetadataUpdater) runRedirectionLoop(attempt func(apis.Metada
 		redirect, err := attempt(cache)
 		if err == nil {
 			return nil
-		} else if redirect == apis.NO_REDIRECT {
+		} else if redirect == apis.NoRedirect {
 			return err
 		} else {
 			lastSkippedError = err

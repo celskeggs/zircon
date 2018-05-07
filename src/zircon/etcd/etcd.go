@@ -18,7 +18,7 @@ type etcdinterface struct {
 	Client    *clientv3.Client
 
 	LeaseMutex sync.Mutex
-	Lease      clientv3.LeaseID
+	Lease      clientv3.LeaseID    // TODO: ensure that Lease is still the same after each transaction
 }
 
 // Connects to etcd and provides our specific etcd interface based on that connection.
@@ -316,7 +316,7 @@ func (e *etcdinterface) DisclaimMetadata(blockid apis.MetadataID) error {
 	return nil
 }
 
-func (e *etcdinterface) GetMetametadata(blockid apis.MetadataID) (apis.Metametadata, error) {
+func (e *etcdinterface) GetMetametadata(blockid apis.MetadataID) (apis.MetadataEntry, error) {
 	checkKey := fmt.Sprintf("/metadata/claims/%d", blockid)
 	readKey := fmt.Sprintf("/metadata/data/%d", blockid)
 
@@ -325,28 +325,25 @@ func (e *etcdinterface) GetMetametadata(blockid apis.MetadataID) (apis.Metametad
 		Then(clientv3.OpGet(readKey)).
 		Commit()
 	if err != nil {
-		return apis.Metametadata{}, err
+		return apis.MetadataEntry{}, err
 	}
 	if !txn.Succeeded {
-		return apis.Metametadata{}, errors.New("cannot get metadata; claim currently held!")
+		return apis.MetadataEntry{}, errors.New("cannot get metadata; claim currently held!")
 	}
 
 	kvs := txn.Responses[0].GetResponseRange().Kvs
 	if len(kvs) == 0 {
 		// just return an empty block by default
-		return apis.Metametadata{
-			MetaID:    blockid,
-			Version:   0,
-			Locations: nil,
+		return apis.MetadataEntry{
+			Replicas: nil,
 		}, nil
 	} else {
 		// otherwise return ACTUAL DATA
-		mmd := apis.Metametadata{}
+		mmd := apis.MetadataEntry{}
 		err := json.Unmarshal(kvs[0].Value, &mmd)
 		if err != nil {
-			return apis.Metametadata{}, err
+			return apis.MetadataEntry{}, err
 		}
-		mmd.MetaID = blockid
 		return mmd, nil
 	}
 }

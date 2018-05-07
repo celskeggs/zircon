@@ -39,20 +39,21 @@ type EtcdInterface interface {
 	BeginMetadataLease() error
 	// Gets the metadata lease timeout for this configuration.
 	GetMetadataLeaseTimeout() time.Duration
-	// Attempt to claim a particular metadata block; if already claimed, returns the original owner. if successfully
-	// claimed, returns our name.
+	// Attempt to claim a particular metadata block; if already claimed, returns the original owner (no error).
+	// if successfully claimed, returns our name.
 	TryClaimingMetadata(blockid MetadataID) (owner ServerName, err error)
 	// Assuming that this server owns a particular block of metadata, release that metadata back out into the wild.
 	DisclaimMetadata(blockid MetadataID) error
-	// Claim some unclaimed metametablock and return number of blocks available for claim
-	LeaseSomeMetametadata() (MetadataID, int, error)
+	// Claim some unclaimed metametablock. If everything that exists is claimed, return 0 and no error.
+	LeaseAnyMetametadata() (MetadataID, error)
 	// Renew the claim on all metadata blocks
 	RenewMetadataClaims() error
 
 	// Get metametadata for a metadata block; only allowed if this server has a current claim on the block
-	GetMetametadata(blockid MetadataID) (Metametadata, error)
+	GetMetametadata(blockid MetadataID) (MetadataEntry, error)
 	// Update metametadata for a metadata block; only allowed if this server has a current claim on the block
-	UpdateMetametadata(blockid MetadataID, data Metametadata) error
+	// If the previous value does not match the current contents, fails.
+	UpdateMetametadata(blockid MetadataID, previous MetadataEntry, data MetadataEntry) error
 
 	// tear down this connection
 	Close() error
