@@ -25,6 +25,10 @@ const EntriesPerBlock = 15
 // Size of the chunk bitset in bytes
 const BitsetSize = 4096
 
+// Returned by MetadataCache functions that could redirect the caller, to say that no, this error cannot be fixed by
+// trying again on another server.
+const NO_REDIRECT = ""
+
 type MetadataCache interface {
 	// Allocate a new metadata entry and corresponding chunk number
 	NewEntry() (ChunkNum, error)
@@ -36,5 +40,5 @@ type MetadataCache interface {
 	UpdateEntry(chunk ChunkNum, previousEntry MetadataEntry, newEntry MetadataEntry) (ServerName, error)
 	// Delete a metadata entry and allow the garbage collection of the underlying chunks
 	// If another server holds the lease on the metametadata the entry belongs to, returns it's name
-	DeleteEntry(chunk ChunkNum) (ServerName, error)
+	DeleteEntry(chunk ChunkNum, previousEntry MetadataEntry) (ServerName, error)
 }

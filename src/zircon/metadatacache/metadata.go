@@ -12,8 +12,6 @@ import (
 	"zircon/rpc"
 )
 
-const NO_REDIRECT = ""
-
 type metadatacache struct {
 	leases    map[apis.MetadataID]apis.Metametadata
 	cache     map[apis.ChunkNum]apis.MetadataEntry
@@ -44,7 +42,7 @@ func (mc *metadatacache) ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, api
 	entry, ok := mc.cache[chunk]
 
 	if ok {
-		return entry, NO_REDIRECT, nil
+		return entry, apis.NO_REDIRECT, nil
 	} else {
 		// Get entry and place into cache
 		// TODO: find a safe way to avoid keeping the lock through readThrough
@@ -54,7 +52,7 @@ func (mc *metadatacache) ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, api
 		}
 		mc.cache[chunk] = entry
 
-		return entry, NO_REDIRECT, nil
+		return entry, apis.NO_REDIRECT, nil
 	}
 }
 
@@ -72,7 +70,7 @@ func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.Metadata
 	// TODO: figure out how to lock earlier to preserve invariants
 	mc.cache[chunk] = entry
 
-	return NO_REDIRECT, nil
+	return apis.NO_REDIRECT, nil
 }
 
 // Delete a metadata entry and allow the garbage collection of the underlying chunks
@@ -88,7 +86,7 @@ func (mc *metadatacache) DeleteEntry(chunk apis.ChunkNum) (apis.ServerName, erro
 	// TODO: figure out how to lock earlier to preserve invariants
 	delete(mc.cache, chunk)
 
-	return NO_REDIRECT, nil
+	return apis.NO_REDIRECT, nil
 }
 
 // Read a metadata entry from the backing store
@@ -104,21 +102,21 @@ func (mc *metadatacache) readThrough(chunk apis.ChunkNum) (apis.MetadataEntry, a
 	name, _ := chooseOneChunkserver(metadata.Locations)
 	chunkserver, err := mc.nameToConn(name)
 	if err != nil {
-		return apis.MetadataEntry{}, NO_REDIRECT, err
+		return apis.MetadataEntry{}, apis.NO_REDIRECT, err
 	}
 
 	// TODO: extract a separate block cache
 	data, _, err := chunkserver.Read(metadata.Chunk, offset, apis.EntrySize, metadata.Version)
 	if err != nil {
-		return apis.MetadataEntry{}, NO_REDIRECT, err
+		return apis.MetadataEntry{}, apis.NO_REDIRECT, err
 	}
 
 	entry, err := deserializeEntry(data)
 	if err != nil {
-		return apis.MetadataEntry{}, NO_REDIRECT, err
+		return apis.MetadataEntry{}, apis.NO_REDIRECT, err
 	}
 
-	return entry, NO_REDIRECT, nil
+	return entry, apis.NO_REDIRECT, nil
 }
 
 // Write an entry to the backing store
@@ -129,7 +127,7 @@ func (mc *metadatacache) writeThrough(chunk apis.ChunkNum, entry apis.MetadataEn
 
 	data, err := serializeEntry(entry)
 	if err != nil {
-		return NO_REDIRECT, err
+		return apis.NO_REDIRECT, err
 	}
 
 	metadata, owner, err := mc.getMetadata(block)
@@ -140,7 +138,7 @@ func (mc *metadatacache) writeThrough(chunk apis.ChunkNum, entry apis.MetadataEn
 	name, primaryI := chooseOneChunkserver(metadata.Locations)
 	chunkserver, err := mc.nameToConn(name)
 	if err != nil {
-		return NO_REDIRECT, err
+		return apis.NO_REDIRECT, err
 	}
 
 	// Remove the name chosen to get the list of replicas
@@ -149,17 +147,17 @@ func (mc *metadatacache) writeThrough(chunk apis.ChunkNum, entry apis.MetadataEn
 		if i != primaryI {
 			replica, err := mc.etcd.GetAddress(name, apis.CHUNKSERVER)
 			if err != nil {
-				return NO_REDIRECT, err
+				return apis.NO_REDIRECT, err
 			}
 			replicas = append(replicas, replica)
 		}
 	}
 	err = chunkserver.StartWriteReplicated(metadata.Chunk, offset, data, replicas)
 	if err != nil {
-		return NO_REDIRECT, err
+		return apis.NO_REDIRECT, err
 	}
 
-	return NO_REDIRECT, nil
+	return apis.NO_REDIRECT, nil
 }
 
 // Delete a metadata entry from the backing store
@@ -175,7 +173,7 @@ func (mc *metadatacache) deleteThrough(chunk apis.ChunkNum) (apis.ServerName, er
 
 	mc.setBitset(false, metadata, chunk)
 
-	return NO_REDIRECT, nil
+	return apis.NO_REDIRECT, nil
 }
 
 // Resolve a chunk server name to a connection with that server
@@ -354,7 +352,7 @@ func (mc *metadatacache) getMetadata(block apis.MetadataID) (apis.Metametadata, 
 	defer mc.mu.Unlock()
 	metadata, ok := mc.leases[block]
 	if ok {
-		return metadata, NO_REDIRECT, nil
+		return metadata, apis.NO_REDIRECT, nil
 	}
 
 	// Otherwise try to obtain a lease
@@ -366,27 +364,27 @@ func (mc *metadatacache) getMetadata(block apis.MetadataID) (apis.Metametadata, 
 	// Then obtain the metametadata
 	metadata, err = mc.etcd.GetMetametadata(block)
 	if err != nil {
-		return apis.Metametadata{}, NO_REDIRECT, err
+		return apis.Metametadata{}, apis.NO_REDIRECT, err
 	}
 
 	// If the metametadata is unitialized, do that
 	if len(metadata.Locations) == 0 {
 		metadata, err = mc.initMetadata(block)
 		if err != nil {
-			return apis.Metametadata{}, NO_REDIRECT, err
+			return apis.Metametadata{}, apis.NO_REDIRECT, err
 		}
 	}
 	// TODO: find a way to have dropped the lock before here, so that we don't hold it too long
 	mc.leases[block] = metadata
 
 	if metadata.MetaID != block {
-		return apis.Metametadata{}, NO_REDIRECT, errors.New("MetadataID doesn't match stored metadata")
+		return apis.Metametadata{}, apis.NO_REDIRECT, errors.New("MetadataID doesn't match stored metadata")
 	}
 	if len(metadata.Locations) == 0 {
-		return apis.Metametadata{}, NO_REDIRECT, errors.New("metadata has no locations")
+		return apis.Metametadata{}, apis.NO_REDIRECT, errors.New("metadata has no locations")
 	}
 
-	return metadata, NO_REDIRECT, nil
+	return metadata, apis.NO_REDIRECT, nil
 }
 
 func (mc *metadatacache) initMetadata(block apis.MetadataID) (apis.Metametadata, error) {

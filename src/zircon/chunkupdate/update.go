@@ -1,0 +1,307 @@
+package chunkupdate
+// This package is here to abstract away the details of performing chunk accesses.
+
+import (
+	"zircon/apis"
+	"sync"
+	"fmt"
+	"errors"
+	"math/rand"
+	"zircon/rpc"
+)
+
+type Reference struct {
+	Chunk    apis.ChunkNum
+	Version  apis.Version
+	Replicas []apis.ServerAddress
+}
+
+type Updater interface {
+	New(replicas int) (apis.ChunkNum, error)
+	ReadMeta(chunk apis.ChunkNum) (*Reference, error)
+	CommitWrite(chunk apis.ChunkNum, version apis.Version, hash apis.CommitHash) (apis.Version, error)
+	Delete(chunk apis.ChunkNum, version apis.Version) error
+}
+
+// Performs a read. 'connect' is a function that, given an address, returns a reference to the chunkserver at that address.
+func (ref *Reference) PerformRead(cache rpc.ConnectionCache, offset uint32, length uint32) ([]byte, error) {
+	if offset + length > apis.MaxChunkSize {
+		return nil, errors.New("read too long")
+	}
+	if len(ref.Replicas) == 0 {
+		return nil, errors.New("cannot perform read; there are no replicas")
+	}
+	var lastInnerErr error
+	var lastOuterErr error
+	// We use rand.Perm so that we'll try the replicas in a random order
+	for _, ii := range rand.Perm(len(ref.Replicas)) {
+		cs, err := cache.SubscribeChunkserver(ref.Replicas[ii])
+		if err == nil {
+			data, _, err := cs.Read(ref.Chunk, offset, length, ref.Version)
+			if err == nil {
+				if uint32(len(data)) != length {
+					panic("postcondition on chunkserver.Read(...) violated")
+				}
+				return data, nil
+			} else {
+				lastInnerErr = err
+			}
+		} else {
+			lastOuterErr = err
+		}
+	}
+	// at this point, we were unsuccessful, and did not manage to read anything
+	if lastInnerErr != nil {
+		return nil, lastInnerErr
+	} else if lastOuterErr != nil {
+		return nil, lastOuterErr
+	} else {
+		panic("should have had an error if we failed")
+	}
+}
+
+// Prepares a write. 'connect' is a function that, given an address, returns a reference to the chunkserver at that address.
+func (ref *Reference) PrepareWrite(cache rpc.ConnectionCache, offset uint32, data []byte) (apis.CommitHash, error) {
+	if offset + uint32(len(data)) > apis.MaxChunkSize {
+		return "", errors.New("write too long")
+	}
+	if len(ref.Replicas) == 0 {
+		return "", errors.New("cannot perform write; there are no replicas")
+	}
+	addresses := make([]apis.ServerAddress, len(ref.Replicas) - 1)
+	for i, ii := range rand.Perm(len(ref.Replicas)) {
+		addresses[i] = ref.Replicas[ii]
+	}
+	initial, err := cache.SubscribeChunkserver(addresses[0])
+	if err != nil {
+		return "", err
+	}
+	return apis.CalculateCommitHash(offset, data), initial.StartWriteReplicated(ref.Chunk, offset, data, addresses[1:])
+}
+
+type UpdaterMetadata interface {
+	NewEntry() (apis.ChunkNum, error)
+	ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, error)
+	UpdateEntry(chunk apis.ChunkNum, previous apis.MetadataEntry, next apis.MetadataEntry) error
+	DeleteEntry(chunk apis.ChunkNum, previous apis.MetadataEntry) error
+}
+
+type UpdaterChunkservers interface {
+	List() ([]apis.ServerID, error)
+	Address(chunkserver apis.ServerID) (apis.ServerAddress, error)
+}
+
+type updater struct {
+	mu           sync.Mutex
+	cache        rpc.ConnectionCache
+	metadata     UpdaterMetadata
+	chunkservers UpdaterChunkservers
+}
+
+func NewUpdater(cache rpc.ConnectionCache, metadata UpdaterMetadata, chunkservers UpdaterChunkservers) Updater {
+	return &updater{
+		metadata: metadata,
+		cache: cache,
+		chunkservers: chunkservers,
+	}
+}
+
+func (f *updater) selectInitialChunkservers(replicas int) ([]apis.ServerID, error) {
+	chunkservers, err := f.chunkservers.List()
+	if err != nil {
+		return nil, err
+	}
+	if len(chunkservers) < replicas {
+		// TODO: make sure that old chunkservers are autoremoved
+		return nil, errors.New("cannot create new chunkservers: not enough chunkservers available")
+	}
+	result := make([]apis.ServerID, replicas)
+	for i, ii := range rand.Perm(len(chunkservers))[:replicas] {
+		result[i] = chunkservers[ii]
+	}
+	return result, nil
+}
+
+// Allocates a new chunk, all zeroed out. The version number will be zero, so the only way to access it initially is
+// with a version of AnyVersion.
+// If this chunk isn't written to before the connection to the server closes, the empty chunk will be deleted.
+func (f *updater) New(replicaNum int) (apis.ChunkNum, error) {
+	// TODO: try to load-balance when initially selecting chunkservers
+	replicas, err := f.selectInitialChunkservers(replicaNum)
+	if err != nil {
+		return 0, err
+	}
+	// TODO: garbage collection should look for Version=0 metadata entries and delete them
+	chunk, err := f.metadata.NewEntry()
+	if err != nil {
+		return 0, err
+	}
+	err = f.metadata.UpdateEntry(chunk, apis.MetadataEntry{}, apis.MetadataEntry{
+		MostRecentVersion:   0,
+		LastConsumedVersion: 0,
+		Replicas:            replicas,
+	})
+	// TODO: how does garbage collection know not to delete this until the client disconnects early or this server crashes?
+	if err != nil {
+		// oh well, it'll get cleaned up by garbage collection
+		return 0, err
+	}
+	return chunk, nil
+}
+
+func (f *updater) getReplicaAddresses(entry apis.MetadataEntry) ([]apis.ServerAddress, error) {
+	addresses := make([]apis.ServerAddress, len(entry.Replicas))
+	for i, id := range entry.Replicas {
+		address, err := f.chunkservers.Address(id)
+		if err != nil {
+			return nil, err
+		}
+		addresses[i] = address
+	}
+	return addresses, nil
+}
+
+func (f *updater) subscribeReplicas(entry apis.MetadataEntry) ([]apis.Chunkserver, error) {
+	replicaAddresses, err := f.getReplicaAddresses(entry)
+	if err != nil {
+		return nil, err
+	}
+	replicas := make([]apis.Chunkserver, len(replicaAddresses))
+	for i, addr := range replicaAddresses {
+		cs, err := f.cache.SubscribeChunkserver(addr)
+		if err != nil {
+			return nil, err
+		}
+		replicas[i] = cs
+	}
+	return replicas, nil
+}
+
+// Reads the metadata entry of a particular chunk.
+func (f *updater) ReadMeta(chunk apis.ChunkNum) (*Reference, error) {
+	entry, err := f.metadata.ReadEntry(chunk)
+	if err != nil {
+		return nil, err
+	}
+	if entry.MostRecentVersion == 0 && entry.LastConsumedVersion > 0 {
+		// then this chunk must be in the process of being deleted... don't let them change it!
+		return nil, errors.New("chunk is gone: being deleted right now")
+	}
+	addresses, err := f.getReplicaAddresses(entry)
+	if err != nil {
+		return nil, err
+	}
+	return &Reference{
+		Chunk: chunk,
+		Version: entry.MostRecentVersion,
+		Replicas: addresses,
+	}, nil
+}
+
+// Writes metadata for a particular chunk, after each chunkserver has received a preparation message for this write.
+// Only performs the write if the version matches.
+func (f *updater) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash apis.CommitHash) (apis.Version, error) {
+	entry, err := f.metadata.ReadEntry(chunk)
+	if err != nil {
+		return 0, fmt.Errorf("while fetching metadata entry: %v", err)
+	}
+	// Confirm that the write can take place to the current version
+	if entry.MostRecentVersion != version && version != apis.AnyVersion {
+		return entry.MostRecentVersion, fmt.Errorf("incorrect chunk version: write=%d, existing=%d", version, entry.MostRecentVersion)
+	}
+	if entry.MostRecentVersion == 0 && entry.LastConsumedVersion > 0 {
+		// then this chunk must be in the process of being deleted... don't let them change it!
+		return 0, errors.New("attempt to write to chunk in the process of deletion")
+	}
+	// Connect to all of the replicas
+	replicas, err := f.subscribeReplicas(entry)
+	if err != nil {
+		return 0, err
+	}
+	// Reserve a version for this write
+	oldEntry := entry
+	if entry.LastConsumedVersion < entry.MostRecentVersion {
+		entry.LastConsumedVersion = entry.MostRecentVersion
+	}
+	entry.LastConsumedVersion += 1
+	if err := f.metadata.UpdateEntry(chunk, oldEntry, entry); err != nil {
+		return 0, fmt.Errorf("while updating metadata entry: %v", err)
+	}
+	// Commit the write to the chunkservers
+	for _, replica := range replicas {
+		if err := replica.CommitWrite(chunk, hash, entry.MostRecentVersion, entry.LastConsumedVersion); err != nil {
+			return 0, fmt.Errorf("while commiting writes: %v", err)
+		}
+	}
+	// Update the latest stored metadata version
+	oldEntry = entry
+	entry.MostRecentVersion = entry.LastConsumedVersion
+	if err := f.metadata.UpdateEntry(chunk, oldEntry, entry); err != nil {
+		return 0, fmt.Errorf("while updating metadata entry: %v", err)
+	}
+	// TODO: how to repair if a failure occurs right here
+	// Tell the chunkservers to start serving this new version
+	for _, replica := range replicas {
+		if err := replica.UpdateLatestVersion(chunk, oldEntry.MostRecentVersion, oldEntry.LastConsumedVersion); err != nil {
+			return 0, err
+		}
+	}
+	return entry.MostRecentVersion, nil
+}
+
+// Destroys an old chunk, assuming that the metadata version matches. This includes sending messages to all relevant
+// chunkservers.
+func (f *updater) Delete(chunk apis.ChunkNum, version apis.Version) error {
+	entry, err := f.metadata.ReadEntry(chunk)
+	if err != nil {
+		return fmt.Errorf("while fetching metadata entry: %v", err)
+	}
+	// First, we mark this as deleted
+	oldEntry := entry
+	entry.MostRecentVersion = 0
+	entry.LastConsumedVersion += 1 // just in case it was still zero; this ensures that this is treated as "deleted" and not just "empty"
+	if err := f.metadata.UpdateEntry(chunk, oldEntry, entry); err != nil {
+		return fmt.Errorf("while updating metadata entry: %v", err)
+	}
+	// Next, we destroy all of the replica data
+	replicas, err := f.subscribeReplicas(entry)
+	if err != nil {
+		return err
+	}
+	// TODO: think through all of the failure cases if a service simultaneously deletes the same chunk
+	for _, replica := range replicas {
+		// TODO: optimize this to not need to list all chunkservers
+		chunks, err := replica.ListAllChunks()
+		if err != nil {
+			return err
+		}
+		var firstDeleteError error
+		for _, cv := range chunks {
+			if cv.Chunk == chunk {
+				err := replica.Delete(chunk, cv.Version)
+				if err != nil && firstDeleteError == nil {
+					// ignore the immediate errors from these, just in case they're caused by a service doing the
+					// deletion; instead, we'll check later to make sure everything's gone.
+					firstDeleteError = err
+				}
+			}
+		}
+		// instead of checking each delete, we just check to make sure everything's gone now
+		chunks, err = replica.ListAllChunks()
+		if err != nil {
+			return err
+		}
+		for _, cv := range chunks {
+			if cv.Chunk == chunk {
+				// oh no! these should all be GONE!
+				if firstDeleteError != nil {
+					return firstDeleteError
+				} else {
+					return errors.New("unexpectedly not-deleted chunkservers")
+				}
+			}
+		}
+	}
+	// Now that all of the replica data is gone, we can get rid of the metadata
+	return f.metadata.DeleteEntry(chunk, entry)
+}
