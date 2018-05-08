@@ -171,17 +171,17 @@ func chunkToBlockID(chunk apis.ChunkNum) apis.MetadataID {
 }
 
 // Compute the index within its metadata block where a chunk should be able to be found
-func chunkToEntryNumber(chunk apis.ChunkNum) uint {
+func chunkToEntryNumber(chunk apis.ChunkNum) uint32 {
 	// Extract just the lower bits
-	return uint(chunk) & ((1 << apis.EntriesPerBlock) - 1)
+	return uint32(chunk) & ((1 << apis.EntriesPerBlock) - 1)
 }
 
 // Calculate the offset of the metadata entry inside of the block in bytes
-func entryNumberToOffset(entryN uint) uint32 {
+func entryNumberToOffset(entryN uint32) uint32 {
 	return uint32(entryN)*apis.EntrySize + apis.BitsetSize
 }
 
-func entryAndBlockToChunkNum(metachunk apis.MetadataID, index uint) apis.ChunkNum {
+func entryAndBlockToChunkNum(metachunk apis.MetadataID, index uint32) apis.ChunkNum {
 	if metachunk == 0 || index >= (1 << apis.EntriesPerBlock) {
 		panic("broken invariant for chunk location")
 	}
@@ -209,7 +209,7 @@ func (mc *metadatacache) NewEntry() (apis.ChunkNum, error) {
 }
 
 // Checks whether a chunk has been allocated or not in the bitset part of a certain metachunk.
-func (mc *metadatacache) getBitset(metachunk apis.MetadataID, index uint) (bool, error) {
+func (mc *metadatacache) getBitset(metachunk apis.MetadataID, index uint32) (bool, error) {
 	data, _, _, err := mc.leasing.Read(metachunk)
 	if err != nil {
 		return false, err
@@ -219,14 +219,14 @@ func (mc *metadatacache) getBitset(metachunk apis.MetadataID, index uint) (bool,
 }
 
 // Checks whether a chunk has been allocated or not in a bitset.
-func getBitsetInData(bitset []byte, index uint) (bool) {
+func getBitsetInData(bitset []byte, index uint32) (bool) {
 	cell := bitset[index / 8]
 	var mask byte = 1 << (index % 8)
 	return (cell & mask) != 0
 }
 
 // Provides write parameters to update a bitset: (offset, data)
-func updateBitsetInData(bitset []byte, index uint, value bool) (uint32, []byte) {
+func updateBitsetInData(bitset []byte, index uint32, value bool) (uint32, []byte) {
 	cell := bitset[index / 8]
 	var mask byte = 1 << (index % 8)
 	if value {
@@ -239,7 +239,7 @@ func updateBitsetInData(bitset []byte, index uint, value bool) (uint32, []byte) 
 
 // Update whether a chunk has been allocated or not in the bitset part of a certain metachunk.
 // Returns 'true' if the request succeeded, false if it was clobbered, and error if anything else happened.
-func (mc *metadatacache) updateBitset(metachunk apis.MetadataID, index uint, value bool) (bool, error) {
+func (mc *metadatacache) updateBitset(metachunk apis.MetadataID, index uint32, value bool) (bool, error) {
 	data, version, _, err := mc.leasing.Read(metachunk)
 	if err != nil {
 		return false, err
@@ -263,7 +263,7 @@ func (mc *metadatacache) updateBitset(metachunk apis.MetadataID, index uint, val
 }
 
 // Tries to find a free chunk anywhere. Returns (metadataID, index, error)
-func (mc *metadatacache) findAnyFreeChunk() (apis.MetadataID, uint, error) {
+func (mc *metadatacache) findAnyFreeChunk() (apis.MetadataID, uint32, error) {
 	// First, see if there is an open spot in a lease that we hold
 	metadataID, index, found, err := mc.findAnyLeasedFreeChunk()
 	if err != nil {
@@ -276,6 +276,7 @@ func (mc *metadatacache) findAnyFreeChunk() (apis.MetadataID, uint, error) {
 	// Now start trying everything else
 	for {
 		// TODO: what if two calls happen at once, and both get new metadata blocks? that's inefficient!
+		// TODO: what if one server runs through this a lot of times, and suddenly has everything claimed? inefficient!
 		metadataID, err := mc.leasing.GetAnyUnleased()
 		if err != nil {
 			return 0, 0, err
@@ -296,7 +297,7 @@ func (mc *metadatacache) findAnyFreeChunk() (apis.MetadataID, uint, error) {
 }
 
 // Tries to find a free chunk in a specific chunk. Returns (index, found, error)
-func (mc *metadatacache) findFreeChunkIn(metachunk apis.MetadataID) (uint, bool, error) {
+func (mc *metadatacache) findFreeChunkIn(metachunk apis.MetadataID) (uint32, bool, error) {
 	data, _, _, err := mc.leasing.Read(metachunk)
 	if err != nil {
 		return 0, false, err
@@ -311,7 +312,7 @@ func (mc *metadatacache) findFreeChunkIn(metachunk apis.MetadataID) (uint, bool,
 }
 
 // Tries to find a free chunk in one of our leased chunks. Returns (metadataID, index, found, error)
-func (mc *metadatacache) findAnyLeasedFreeChunk() (apis.MetadataID, uint, bool, error) {
+func (mc *metadatacache) findAnyLeasedFreeChunk() (apis.MetadataID, uint32, bool, error) {
 	leases, err := mc.leasing.ListLeases()
 	if err != nil {
 		return 0, 0, false, err
@@ -329,18 +330,18 @@ func (mc *metadatacache) findAnyLeasedFreeChunk() (apis.MetadataID, uint, bool, 
 }
 
 // Finds a cell in a bitset that has a chunkNum available and returns the index of the available cell
-func findAvailableCell(bitset []byte) (uint, bool) {
+func findAvailableCell(bitset []byte) (uint32, bool) {
 	for i, cell := range bitset {
 		// Cell is full if it is all ones
 		if cell != 0xFF {
-			return uint(i) * 8 + findFirstZero(cell), true
+			return uint32(i) * 8 + findFirstZero(cell), true
 		}
 	}
 	return 0, false
 }
 
-func findFirstZero(x byte) uint {
-	for i := uint(0); i < 8; i++ {
+func findFirstZero(x byte) uint32 {
+	for i := uint32(0); i < 8; i++ {
 		if x&1 == 0 {
 			return i
 		} else {

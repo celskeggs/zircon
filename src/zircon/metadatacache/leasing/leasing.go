@@ -132,7 +132,7 @@ func (l *Leasing) GetAnyUnleased() (apis.MetadataID, error) {
 	if !l.safe {
 		return 0, errors.New("lease has expired! cannot safely perform any operations.")
 	}
-	id, err := l.etcd.LeaseAnyMetametadata()
+	id, err := l.etcd.LeaseOrCreateAnyMetametadata()
 	if err != nil {
 		return 0, err
 	}
