@@ -2,10 +2,7 @@ package access
 
 import (
 	"zircon/apis"
-	"zircon/rpc"
 	"zircon/chunkupdate"
-	"fmt"
-	"sync"
 	"github.com/pkg/errors"
 )
 
