@@ -126,13 +126,13 @@ func (l *Leasing) notifyUnsafe_LK() {
 }
 
 // Get *any* unleased block. If everything that exists is leased, create a new block with all zeroes and lease it.
-func (l *Leasing) GetAnyUnleased() (apis.MetadataID, error) {
+func (l *Leasing) GetOrCreateAnyUnleased() (apis.MetadataID, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !l.safe {
 		return 0, errors.New("lease has expired! cannot safely perform any operations.")
 	}
-	id, err := l.etcd.LeaseOrCreateAnyMetametadata()
+	id, err := l.etcd.LeaseAnyMetametadata()
 	if err != nil {
 		return 0, err
 	}

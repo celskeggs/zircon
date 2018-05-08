@@ -295,8 +295,8 @@ func (e *etcdinterface) TryClaimingMetadata(blockid apis.MetadataID) (apis.Serve
 }
 
 // Try claiming some block of metametadata that is available and report how many remaining blocks are available to be leased
-func (e *etcdinterface) LeaseSomeMetametadata() (apis.MetadataID, int, error) {
-	panic("Unimplemented")
+func (e *etcdinterface) LeaseOrCreateAnyMetametadata() (apis.MetadataID, error) {
+	return 0, errors.New("unimplemented") // TODO: implement
 }
 
 // Assuming that this server owns a particular block of metadata, release that metadata back out into the wild.

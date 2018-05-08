@@ -45,7 +45,7 @@ type EtcdInterface interface {
 	// Assuming that this server owns a particular block of metadata, release that metadata back out into the wild.
 	DisclaimMetadata(blockid MetadataID) error
 	// Claim some unclaimed metametablock. If everything that exists is claimed, return 0 and no error.
-	LeaseOrCreateAnyMetametadata() (MetadataID, error)
+	LeaseAnyMetametadata() (MetadataID, error)
 	// Renew the claim on all metadata blocks
 	RenewMetadataClaims() error
 

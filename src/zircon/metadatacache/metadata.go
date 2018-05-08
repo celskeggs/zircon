@@ -277,7 +277,7 @@ func (mc *metadatacache) findAnyFreeChunk() (apis.MetadataID, uint32, error) {
 	for {
 		// TODO: what if two calls happen at once, and both get new metadata blocks? that's inefficient!
 		// TODO: what if one server runs through this a lot of times, and suddenly has everything claimed? inefficient!
-		metadataID, err := mc.leasing.GetAnyUnleased()
+		metadataID, err := mc.leasing.GetOrCreateAnyUnleased()
 		if err != nil {
 			return 0, 0, err
 		}
