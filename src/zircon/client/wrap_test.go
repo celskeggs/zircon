@@ -12,27 +12,13 @@ import (
 	"zircon/util"
 )
 
-type MultiTeardown struct {
-	teardowns []func()
-}
-
-func (m *MultiTeardown) Teardown() {
-	for _, teardown := range m.teardowns {
-		teardown()
-	}
-}
-
-func (m *MultiTeardown) Add(teardowns ...func()) {
-	m.teardowns = append(m.teardowns, teardowns...)
-}
-
 // NOTE: Only simple tests are provided here. Everything else should either go into control/client_test.go or should be
 // end-to-end tests that cover more than just this subsystem.
 
 // Prepares three chunkservers (cs0-cs2) and one frontend server (fe0)
 func PrepareNetworkedCluster(t *testing.T) (fe apis.Client, teardown func()) {
 	cache := rpc.NewConnectionCache()
-	teardowns := &MultiTeardown{}
+	teardowns := &util.MultiTeardown{}
 	cs0, _, teardown1 := chunkserver.NewTestChunkserver(t, cache)
 	cs1, _, teardown2 := chunkserver.NewTestChunkserver(t, cache)
 	cs2, _, teardown3 := chunkserver.NewTestChunkserver(t, cache)
@@ -58,7 +44,7 @@ func PrepareNetworkedCluster(t *testing.T) (fe apis.Client, teardown func()) {
 	for _, name := range []apis.ServerName{"fe0", "fe1", "fe2"} {
 		etcdn, teardown8 := etcds(name)
 
-		fen, err := frontend.ConstructFrontendOnNetwork(etcdn, cache)
+		fen, err := frontend.ConstructFrontend(etcdn, cache)
 		assert.NoError(t, err)
 		teardown9, address, err := rpc.PublishFrontend(fen, "127.0.0.1:0")
 		assert.NoError(t, err)

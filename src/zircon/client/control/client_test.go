@@ -20,29 +20,39 @@ import (
 func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats chunkserver.StorageStats, fe apis.Frontend, teardown func()) {
 	cache := &rpc.MockCache{
 		Frontends: map[apis.ServerAddress]apis.Frontend{},
+		Chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
 	}
-	cs0, stats1, teardown1 := chunkserver.NewTestChunkserver(t, cache)
-	cs1, stats2, teardown2 := chunkserver.NewTestChunkserver(t, cache)
-	cs2, stats3, teardown3 := chunkserver.NewTestChunkserver(t, cache)
-	cache.Chunkservers = map[apis.ServerAddress]apis.Chunkserver{
-		"cs0": cs0,
-		"cs1": cs1,
-		"cs2": cs2,
+	etcds, teardown1 := etcd.PrepareSubscribeForTesting(t)
+	var teardowns util.MultiTeardown
+	teardowns.Add(teardown1)
+	var allStats []chunkserver.StorageStats
+	for i := 0; i < 3; i++ {
+		name := apis.ServerName(fmt.Sprintf("cs%d", i))
+		address := apis.ServerAddress(fmt.Sprintf("cs-address-%d", i))
+
+		cs, csStats, csTeardown := chunkserver.NewTestChunkserver(t, cache)
+		teardowns.Add(csTeardown)
+		allStats = append(allStats, csStats)
+		cache.Chunkservers[address] = cs
+
+		etcd0, etcdClientTeardown := etcds(name)
+		if err := etcd0.UpdateAddress(address, apis.CHUNKSERVER); err != nil {
+			t.Fatal(err)
+		}
+		teardowns.Add(etcdClientTeardown)
 	}
-	etcds, teardown4 := etcd.PrepareSubscribeForTesting(t)
-	etcd0, teardown5 := etcds("fe0")
-	fe, err := frontend.ConstructFrontendOnNetwork(etcd0, cache)
+	etcd0, teardown2 := etcds("fe0")
+	teardowns.Add(teardown2)
+	fe, err := frontend.ConstructFrontend(etcd0, cache)
 	assert.NoError(t, err)
 	return cache, func() int {
 			// TODO: include partial metadata usage in these stats?
-			return stats1() + stats2() + stats3()
-		}, fe, func() {
-			teardown5()
-			teardown4()
-			teardown3()
-			teardown2()
-			teardown1()
-		}
+			sum := 0
+			for _, statf := range allStats {
+				sum += statf()
+			}
+			return sum
+		}, fe, teardowns.Teardown
 }
 
 func PrepareSimpleClient(t *testing.T) (apis.Client, func()) {

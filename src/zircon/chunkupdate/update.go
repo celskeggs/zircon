@@ -108,7 +108,7 @@ func (f *updater) selectInitialChunkservers(replicas int) ([]apis.ServerID, erro
 	}
 	if len(chunkservers) < replicas {
 		// TODO: make sure that old chunkservers are autoremoved
-		return nil, errors.New("cannot create new chunkservers: not enough chunkservers available")
+		return nil, fmt.Errorf("cannot create new chunks: not enough chunkservers: %v", chunkservers)
 	}
 	result := make([]apis.ServerID, replicas)
 	for i, ii := range rand.Perm(len(chunkservers))[:replicas] {
