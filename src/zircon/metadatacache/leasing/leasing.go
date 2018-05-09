@@ -5,7 +5,7 @@ import (
 	"zircon/apis"
 	"zircon/rpc"
 	"sync"
-	"github.com/pkg/errors"
+	"errors"
 	"fmt"
 	"time"
 )

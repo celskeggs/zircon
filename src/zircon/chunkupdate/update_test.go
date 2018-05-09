@@ -7,7 +7,7 @@ import (
 	"zircon/apis/mocks"
 	"fmt"
 	"math/rand"
-	"github.com/pkg/errors"
+	"errors"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/assert"
 	"zircon/chunkserver"

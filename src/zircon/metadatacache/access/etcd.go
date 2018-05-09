@@ -3,7 +3,7 @@ package access
 import (
 	"zircon/apis"
 	"zircon/chunkupdate"
-	"github.com/pkg/errors"
+	"errors"
 )
 
 type etcdMetadataUpdater struct {
