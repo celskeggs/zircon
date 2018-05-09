@@ -37,7 +37,10 @@ func (f *frontend) New() (apis.ChunkNum, error) {
 // Reads the metadata entry of a particular chunk.
 func (f *frontend) ReadMetadataEntry(chunk apis.ChunkNum) (apis.Version, []apis.ServerAddress, error) {
 	ref, err := f.updater.ReadMeta(chunk)
-	return ref.Version, ref.Replicas, err
+	if err != nil {
+		return 0, nil, err
+	}
+	return ref.Version, ref.Replicas, nil
 }
 
 // Writes metadata for a particular chunk, after each chunkserver has received a preparation message for this write.

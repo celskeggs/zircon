@@ -14,6 +14,7 @@ import (
 	"zircon/frontend"
 	"zircon/rpc"
 	"zircon/util"
+	"zircon/metadatacache"
 )
 
 // Prepares three chunkservers (cs0-cs2) and one frontend server (fe0)
@@ -36,15 +37,21 @@ func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats chun
 		cache.Chunkservers[address] = cs
 
 		etcd0, etcdClientTeardown := etcds(name)
-		if err := etcd0.UpdateAddress(address, apis.CHUNKSERVER); err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, etcd0.UpdateAddress(address, apis.CHUNKSERVER))
 		teardowns.Add(etcdClientTeardown)
 	}
+
 	etcd0, teardown2 := etcds("fe0")
 	teardowns.Add(teardown2)
 	fe, err := frontend.ConstructFrontend(etcd0, cache)
 	assert.NoError(t, err)
+	mdc0, err := metadatacache.NewCache(cache, etcd0)
+	assert.NoError(t, err)
+	cache.MetadataCaches = map[apis.ServerAddress]apis.MetadataCache{
+		"mdc-address-0": mdc0,
+	}
+	assert.NoError(t, etcd0.UpdateAddress("mdc-address-0", apis.METADATACACHE))
+
 	return cache, func() int {
 			// TODO: include partial metadata usage in these stats?
 			sum := 0
@@ -73,7 +80,7 @@ func TestSimpleClientReadWrite(t *testing.T) {
 	defer teardown()
 
 	cn, err := client.New()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, _, err = client.Read(cn, 0, 1)
 	assert.Error(t, err)
@@ -137,7 +144,7 @@ func TestMaxSizeChecking(t *testing.T) {
 
 	// confirm write succeeded this time
 	rdata, ver2, err := client.Read(cn, 0, apis.MaxChunkSize)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, ver, ver2)
 	assert.Equal(t, apis.MaxChunkSize, len(rdata))
 	assert.Equal(t, byte('a'), rdata[apis.MaxChunkSize-1])
