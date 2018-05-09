@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/assert"
 	"zircon/chunkserver"
+	mocks2 "zircon/chunkupdate/mocks"
+	"sort"
 )
 
 // Testing strategy split throughout file
@@ -212,6 +214,7 @@ func GenericTestPrepareWrite(t *testing.T, offset uint32, length uint32, replica
 		m.AssertExpectations(t)
 	}
 }
+
 //   PrepareWrite partitions:
 //     offset+length = 0, 0<x<apis.MaxChunkSize, apis.MaxChunkSize, >apis.MaxChunkSize
 //     replica # = 0, 1, >1
@@ -291,14 +294,106 @@ func TestPrepareWrite_ManyReplicas(t *testing.T) {
 //     # replicas: 0, >0
 //     success: yes, no
 
+func GenericTestReadMeta(t *testing.T, exists bool, mrv apis.Version, lcv apis.Version, replicas int) {
+	cache := &rpc.MockCache{}
+
+	etcdMock := &mocks.EtcdInterface{}
+	metadataMock := &mocks2.UpdaterMetadata{}
+	allMocks := []mock.Mock{etcdMock.Mock, metadataMock.Mock}
+
+	updater := NewUpdater(cache, etcdMock, metadataMock)
+	chunk := apis.ChunkNum(rand.Uint64())
+	var replicaAddresses []apis.ServerAddress
+	var replicaIDs []apis.ServerID
+
+	expectSuccess := exists && !(lcv < mrv)
+
+	// prepare mock operations!
+
+	for repN := 0; repN < replicas; repN++ {
+		replicaID := apis.ServerID(rand.Uint32())
+		name := apis.ServerName(fmt.Sprintf("replica-%d", repN))
+		address := apis.ServerAddress(fmt.Sprintf("address-%d", rand.Uint64()))
+
+		replicaIDs = append(replicaIDs, replicaID)
+		replicaAddresses = append(replicaAddresses, address)
+
+		if expectSuccess {
+			etcdMock.On("GetNameByID", replicaID).Return(name, nil)
+			etcdMock.On("GetAddress", name, apis.CHUNKSERVER).Return(address, nil)
+		}
+	}
+
+	if exists {
+		metadataMock.On("ReadEntry", chunk).Return(apis.MetadataEntry{
+			Replicas:            replicaIDs,
+			MostRecentVersion:   mrv,
+			LastConsumedVersion: lcv,
+		}, nil)
+	} else {
+		metadataMock.On("ReadEntry", chunk).Return(apis.MetadataEntry{}, errors.New("no such chunk"))
+	}
+
+	// perform operation!
+
+	ref, err := updater.ReadMeta(chunk)
+	if expectSuccess {
+		// expect success!
+		assert.NoError(t, err)
+		assert.Equal(t, chunk, ref.Chunk)
+		assert.Equal(t, mrv, ref.Version)
+		if len(replicaAddresses) == 0 {
+			assert.Empty(t, ref.Replicas)
+		} else {
+			sort.Slice(replicaAddresses, func(i, j int) bool {
+				return replicaAddresses[i] < replicaAddresses[j]
+			})
+			sort.Slice(ref.Replicas, func(i, j int) bool {
+				return ref.Replicas[i] < ref.Replicas[j]
+			})
+			assert.Equal(t, replicaAddresses, ref.Replicas)
+		}
+	} else {
+		assert.Error(t, err)
+	}
+
+	for _, m := range allMocks {
+		m.AssertExpectations(t)
+	}
+}
+
 // test case covers: doesn't exist, n/a, n/a, n/a, n/a, no
+func TestReadMeta_NonExistent(t *testing.T) {
+	GenericTestReadMeta(t, false, 1, 1, 1)
+}
 // test case covers: exists, 0, 0, same, 0, yes
+func TestReadMeta_JustCreated_NoReplicas(t *testing.T) {
+	GenericTestReadMeta(t, true, 0, 0, 0)
+}
 // test case covers: exists, 0, 0, same, >0, yes
+func TestReadMeta_JustCreated_SomeReplicas(t *testing.T) {
+	GenericTestReadMeta(t, true, 0, 0, 5)
+}
 // test case covers: exists, 0, >0, one off, >0, yes
+func TestReadMeta_NearNew(t *testing.T) {
+	GenericTestReadMeta(t, true, 0, 1, 3)
+}
 // test case covers: exists, >0, >0, same, >0, yes
+func TestReadMeta_Populated(t *testing.T) {
+	GenericTestReadMeta(t, true, 55, 55, 5)
+}
 // test case covers: exists, >0, >0, one off, >0, yes
+func TestReadMeta_DifferentVersions(t *testing.T) {
+	GenericTestReadMeta(t, true, 88, 89, 4)
+}
 // test case covers: exists, >0, >0, further off, >0, yes
+func TestReadMeta_FarOffVersions(t *testing.T) {
+	GenericTestReadMeta(t, true, 44, 1514324, 8)
+}
 // test case covers: currently deleting, >0, 0, further off, >0, no
+func TestReadMeta_CurrentlyDeleting(t *testing.T) {
+	GenericTestReadMeta(t, true, 0xFFFFFFFFFFFFFFFF, 0, 3)
+}
 
 //   New partitions:
 //     number of replicas: 0, 1, >1
