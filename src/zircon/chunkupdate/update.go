@@ -23,7 +23,13 @@ type Updater interface {
 	Delete(chunk apis.ChunkNum, version apis.Version) error
 }
 
-// Performs a read. 'connect' is a function that, given an address, returns a reference to the chunkserver at that address.
+// Performs a read.
+// Preconditions:
+//   offset + length <= apis.MaxChunkSize
+//   ref is fully populated
+// Postconditions:
+//   Either returns data and its valid version (of at least this ref's version) read from a chunkserver
+//   Or fails, if all chunkservers failed to respond
 func (ref *Reference) PerformRead(cache rpc.ConnectionCache, offset uint32, length uint32) ([]byte, apis.Version, error) {
 	if offset + length > apis.MaxChunkSize {
 		return nil, 0, errors.New("read too long")
@@ -60,7 +66,14 @@ func (ref *Reference) PerformRead(cache rpc.ConnectionCache, offset uint32, leng
 	}
 }
 
-// Prepares a write. 'connect' is a function that, given an address, returns a reference to the chunkserver at that address.
+// Prepares a write.
+// Preconditions:
+//   offset + length <= apis.MaxChunkSize
+//   ref is populated
+// Postconditions:
+//   If possible, all chunkservers have a copy of the data, directly or indirectly.
+//   On success, Returns the valid commit hash for this data.
+//   Fails if any server fails to connect, directly or indirectly.
 func (ref *Reference) PrepareWrite(cache rpc.ConnectionCache, offset uint32, data []byte) (apis.CommitHash, error) {
 	if offset + uint32(len(data)) > apis.MaxChunkSize {
 		return "", errors.New("write too long")
@@ -102,6 +115,9 @@ func NewUpdater(cache rpc.ConnectionCache, etcd apis.EtcdInterface, metadata Upd
 }
 
 func (f *updater) selectInitialChunkservers(replicas int) ([]apis.ServerID, error) {
+	if replicas <= 0 {
+		return nil, errors.New("must request at least one replica")
+	}
 	chunkservers, err := ListChunkservers(f.etcd)
 	if err != nil {
 		return nil, err
@@ -173,13 +189,20 @@ func (f *updater) subscribeReplicas(entry apis.MetadataEntry) ([]apis.Chunkserve
 }
 
 // Reads the metadata entry of a particular chunk.
+// Preconditions:
+//   the chunk exists
+//   the chunk is not currently being deleted (i.e. not the case that MRV > LCV)
+// Postconditions:
+//   the MRV (not the LCV) is returned as the version
+//   the chunk is returned as the chunk
+//   the list of replicas from the metadata entry is returned in full
 func (f *updater) ReadMeta(chunk apis.ChunkNum) (*Reference, error) {
 	entry, err := f.metadata.ReadEntry(chunk)
 	if err != nil {
 		return nil, err
 	}
-	if entry.MostRecentVersion == 0 && entry.LastConsumedVersion > 0 {
-		// then this chunk must be in the process of being deleted... don't let them change it!
+	if entry.MostRecentVersion > entry.LastConsumedVersion {
+		// then this chunk must be in the process of being deleted... don't let them read it!
 		return nil, errors.New("chunk is gone: being deleted right now")
 	}
 	addresses, err := f.getReplicaAddresses(entry)
@@ -200,13 +223,16 @@ func (f *updater) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash ap
 	if err != nil {
 		return 0, fmt.Errorf("while fetching metadata entry: %v", err)
 	}
+	if len(entry.Replicas) == 0 {
+		return 0, fmt.Errorf("no replicas available for chunk")
+	}
+	if entry.MostRecentVersion > entry.LastConsumedVersion {
+		// then this chunk must be in the process of being deleted... don't let them change it!
+		return 0, errors.New("attempt to write to chunk in the process of deletion")
+	}
 	// Confirm that the write can take place to the current version
 	if entry.MostRecentVersion != version && version != apis.AnyVersion {
 		return entry.MostRecentVersion, fmt.Errorf("incorrect chunk version: write=%d, existing=%d", version, entry.MostRecentVersion)
-	}
-	if entry.MostRecentVersion == 0 && entry.LastConsumedVersion > 0 {
-		// then this chunk must be in the process of being deleted... don't let them change it!
-		return 0, errors.New("attempt to write to chunk in the process of deletion")
 	}
 	// Connect to all of the replicas
 	replicas, err := f.subscribeReplicas(entry)
@@ -215,15 +241,13 @@ func (f *updater) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash ap
 	}
 	// Reserve a version for this write
 	oldEntry := entry
-	if entry.LastConsumedVersion < entry.MostRecentVersion {
-		entry.LastConsumedVersion = entry.MostRecentVersion
-	}
 	entry.LastConsumedVersion += 1
 	if err := f.metadata.UpdateEntry(chunk, oldEntry, entry); err != nil {
 		return 0, fmt.Errorf("while updating metadata entry: %v", err)
 	}
 	// Commit the write to the chunkservers
 	for _, replica := range replicas {
+		// TODO: accept imperfect durability for the sake of availability
 		if err := replica.CommitWrite(chunk, hash, entry.MostRecentVersion, entry.LastConsumedVersion); err != nil {
 			return 0, fmt.Errorf("while commiting writes: %v", err)
 		}
@@ -237,6 +261,7 @@ func (f *updater) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash ap
 	// TODO: how to repair if a failure occurs right here
 	// Tell the chunkservers to start serving this new version
 	for _, replica := range replicas {
+		// TODO: accept these failures in some way
 		if err := replica.UpdateLatestVersion(chunk, oldEntry.MostRecentVersion, oldEntry.LastConsumedVersion); err != nil {
 			return 0, err
 		}
@@ -249,12 +274,19 @@ func (f *updater) CommitWrite(chunk apis.ChunkNum, version apis.Version, hash ap
 func (f *updater) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	entry, err := f.metadata.ReadEntry(chunk)
 	if err != nil {
-		return fmt.Errorf("while fetching metadata entry: %v", err)
+		return fmt.Errorf("while fetching pre-deletion metadata entry: %v", err)
+	}
+	if entry.MostRecentVersion > entry.LastConsumedVersion {
+		// then this chunk must be in the process of being deleted... don't let them delete it again!
+		return errors.New("attempt to delete chunk in the process of deletion")
+	}
+	if entry.MostRecentVersion != version {
+		return errors.New("version mismatch during delete; will not delete")
 	}
 	// First, we mark this as deleted
 	oldEntry := entry
-	entry.MostRecentVersion = 0
-	entry.LastConsumedVersion += 1 // just in case it was still zero; this ensures that this is treated as "deleted" and not just "empty"
+	entry.MostRecentVersion = 0xFFFFFFFFFFFFFFFF
+	entry.LastConsumedVersion = 0
 	if err := f.metadata.UpdateEntry(chunk, oldEntry, entry); err != nil {
 		return fmt.Errorf("while updating metadata entry: %v", err)
 	}
@@ -265,7 +297,7 @@ func (f *updater) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	}
 	// TODO: think through all of the failure cases if a service simultaneously deletes the same chunk
 	for _, replica := range replicas {
-		// TODO: optimize this to not need to list all chunkservers
+		// TODO: optimize this to not need to list all chunks
 		chunks, err := replica.ListAllChunks()
 		if err != nil {
 			return err
