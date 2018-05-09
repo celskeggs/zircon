@@ -28,7 +28,7 @@ func GenericTestPerformRead(t *testing.T, offset uint32, length uint32, replicaF
 	cache := &rpc.MockCache{
 		Chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
 	}
-	var allMocks []mock.Mock
+	var allMocks []*mock.Mock
 
 	chunk := apis.ChunkNum(rand.Uint64())
 	version := apis.Version(rand.Uint64())
@@ -45,6 +45,7 @@ func GenericTestPerformRead(t *testing.T, offset uint32, length uint32, replicaF
 
 	expectSuccess := false
 	var replicaAddresses []apis.ServerAddress
+	sizeFail := offset + length > apis.MaxChunkSize
 
 	for id, fail := range replicaFails {
 		expectSuccess = expectSuccess || !fail
@@ -55,16 +56,18 @@ func GenericTestPerformRead(t *testing.T, offset uint32, length uint32, replicaF
 
 		chunkMock := &mocks.Chunkserver{}
 		cache.Chunkservers[address] = chunkMock
-		allMocks = append(allMocks, chunkMock.Mock)
+		allMocks = append(allMocks, &chunkMock.Mock)
 
-		if fail {
+		if sizeFail {
+			// don't expect anything
+		} else if fail {
 			chunkMock.On("Read", chunk, offset, length, version).Return(nil, apis.Version(0), errors.New("sample failure for update_test"))
 		} else {
 			chunkMock.On("Read", chunk, offset, length, version).Return(data, realVersion, nil)
 		}
 	}
 
-	if offset + length > apis.MaxChunkSize {
+	if sizeFail {
 		expectSuccess = false
 	}
 
@@ -84,8 +87,11 @@ func GenericTestPerformRead(t *testing.T, offset uint32, length uint32, replicaF
 		assert.Error(t, err)
 	}
 
-	for _, m := range allMocks {
-		m.AssertExpectations(t)
+	// only confirm if we *know* that everything should have been called
+	if (!expectSuccess || len(replicaFails) == 1) && !sizeFail {
+		for _, m := range allMocks {
+			m.AssertExpectations(t)
+		}
 	}
 }
 
@@ -156,7 +162,7 @@ func GenericTestPrepareWrite(t *testing.T, offset uint32, length uint32, replica
 	cache := &rpc.MockCache{
 		Chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
 	}
-	var allMocks []mock.Mock
+	var allMocks []*mock.Mock
 
 	chunk := apis.ChunkNum(rand.Uint64())
 	data := make([]byte, length)
@@ -182,7 +188,7 @@ func GenericTestPrepareWrite(t *testing.T, offset uint32, length uint32, replica
 		chunkChatter, err := chunkserver.WithChatter(chunkMock, cache)
 		assert.NoError(t, err)
 		cache.Chunkservers[address] = chunkChatter
-		allMocks = append(allMocks, chunkMock.Mock)
+		allMocks = append(allMocks, &chunkMock.Mock)
 
 		if fail {
 			chunkMock.On("StartWrite", chunk, offset, data).Return(errors.New("sample failure for update_test"))
@@ -206,12 +212,12 @@ func GenericTestPrepareWrite(t *testing.T, offset uint32, length uint32, replica
 	if expectSuccess {
 		assert.NoError(t, err)
 		assert.Equal(t, expectedHash, hash)
+
+		for _, m := range allMocks {
+			m.AssertExpectations(t)
+		}
 	} else {
 		assert.Error(t, err)
-	}
-
-	for _, m := range allMocks {
-		m.AssertExpectations(t)
 	}
 }
 
@@ -299,7 +305,7 @@ func GenericTestReadMeta(t *testing.T, exists bool, mrv apis.Version, lcv apis.V
 
 	etcdMock := &mocks.EtcdInterface{}
 	metadataMock := &mocks2.UpdaterMetadata{}
-	allMocks := []mock.Mock{etcdMock.Mock, metadataMock.Mock}
+	allMocks := []*mock.Mock{&etcdMock.Mock, &metadataMock.Mock}
 
 	updater := NewUpdater(cache, etcdMock, metadataMock)
 	chunk := apis.ChunkNum(rand.Uint64())
@@ -400,12 +406,102 @@ func TestReadMeta_CurrentlyDeleting(t *testing.T) {
 //     number of replicas versus number of chunkservers: <, =, >
 //     success: yes, no
 
+func GenericTestNew(t *testing.T, replicas int, chunkservers int) {
+	cache := &rpc.MockCache{}
+
+	etcdMock := &mocks.EtcdInterface{}
+	metadataMock := &mocks2.UpdaterMetadata{}
+
+	updater := NewUpdater(cache, etcdMock, metadataMock)
+	chunk := apis.ChunkNum(rand.Uint64())
+	var chunkIDs []apis.ServerID
+	var chunkNames []apis.ServerName
+
+	expectSuccess := replicas != 0 && replicas <= chunkservers
+
+	// prepare mock operations!
+
+	for csI := 0; csI < chunkservers; csI++ {
+		replicaID := apis.ServerID(rand.Uint32())
+		name := apis.ServerName(fmt.Sprintf("chunkserver-%d", csI))
+
+		chunkIDs = append(chunkIDs, replicaID)
+		chunkNames = append(chunkNames, name)
+
+		if replicas != 0 {
+			etcdMock.On("GetIDByName", name).Return(replicaID, nil)
+		}
+	}
+
+	if replicas != 0 {
+		etcdMock.On("ListServers", apis.CHUNKSERVER).Return(chunkNames, nil)
+	}
+
+	if expectSuccess {
+		metadataMock.On("NewEntry").Return(chunk, nil)
+		metadataMock.On("UpdateEntry", chunk, apis.MetadataEntry{}, mock.MatchedBy(func(ent apis.MetadataEntry) bool {
+			// first, make sure all IDs are unique
+			found := map[apis.ServerID]bool{}
+			for _, replica := range ent.Replicas {
+				if found[replica] {
+					return false
+				}
+				found[replica] = true
+			}
+			// then make sure that all IDs are valid
+			for _, replica := range ent.Replicas {
+				foundAny := false
+				for _, compare := range chunkIDs {
+					foundAny = foundAny || compare == replica
+				}
+				if !foundAny {
+					return false
+				}
+			}
+			// then check that the right number of IDs are present, and the right uninitialized versions
+			return ent.LastConsumedVersion == 0 && ent.MostRecentVersion == 0 && len(ent.Replicas) == replicas
+		})).Return(nil)
+	}
+
+	// perform operation!
+
+	foundChunk, err := updater.New(replicas)
+	if expectSuccess {
+		// expect success!
+		assert.NoError(t, err)
+		assert.Equal(t, chunk, foundChunk)
+	} else {
+		assert.Error(t, err)
+	}
+
+	etcdMock.AssertExpectations(t)
+	metadataMock.AssertExpectations(t)
+}
+
 // test case covers: 0, =, no
+func TestNew_NoReplicas_AtAll(t *testing.T) {
+	GenericTestNew(t, 0, 0)
+}
 // test case covers: 0, <, no
+func TestNew_NoReplicas_Chosen(t *testing.T) {
+	GenericTestNew(t, 0, 3)
+}
 // test case covers: 1, =, yes
+func TestNew_OneOfOneReplica(t *testing.T) {
+	GenericTestNew(t, 1, 1)
+}
 // test case covers: 1, <, yes
-// test case covers: 1, >, no
+func TestNew_OneReplica(t *testing.T) {
+	GenericTestNew(t, 1, 3)
+}
+// test case covers: >1, >, no
+func TestNew_NotEnoughReplicas(t *testing.T) {
+	GenericTestNew(t, 2, 1)
+}
 // test case covers: >1, =, yes
+func TestNew_ExactlyEnoughReplicas(t *testing.T) {
+	GenericTestNew(t, 7, 7)
+}
 
 //   CommitWrite partitions:
 //     chunk: exists, doesn't exist, currently deleting
