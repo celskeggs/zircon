@@ -510,14 +510,133 @@ func TestNew_ExactlyEnoughReplicas(t *testing.T) {
 //     version: matches, request newer, request older
 //     success: yes, no
 
+func GenericTestCommitWrite(t *testing.T, exists bool, deleting bool, replicaFails []bool, versionRelative int) {
+	cache := &rpc.MockCache{
+		Chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
+	}
+
+	etcdMock := &mocks.EtcdInterface{}
+	metadataMock := &mocks2.UpdaterMetadata{}
+	allMocks := []*mock.Mock{&etcdMock.Mock, &metadataMock.Mock}
+
+	updater := NewUpdater(cache, etcdMock, metadataMock)
+	chunk := apis.ChunkNum(rand.Uint64())
+	version := apis.Version(rand.Uint32() + 100)
+	lcv := version + 3
+
+	expectedHash := apis.CommitHash("!! FAKE HASH !!")
+
+	var chunkserverIDs []apis.ServerID
+	var chunkserverAddresses []apis.ServerAddress
+
+	expectSuccess := exists && !deleting && versionRelative == 0 && len(replicaFails) != 0
+
+	// prepare mock operations!
+
+	for csI, fail := range replicaFails {
+		expectSuccess = expectSuccess && !fail
+		replicaID := apis.ServerID(rand.Uint32())
+		name := apis.ServerName(fmt.Sprintf("chunkserver-%d", csI))
+		address := apis.ServerAddress(fmt.Sprintf("address-%d", rand.Uint64()))
+
+		chunkserverIDs = append(chunkserverIDs, replicaID)
+		chunkserverAddresses = append(chunkserverAddresses, address)
+
+		chunkMock := &mocks.Chunkserver{}
+		allMocks = append(allMocks, &chunkMock.Mock)
+
+		cache.Chunkservers[address] = chunkMock
+
+		etcdMock.On("GetNameByID", replicaID).Return(name, nil)
+		etcdMock.On("GetAddress", name, apis.CHUNKSERVER).Return(address, nil)
+
+		if fail {
+			chunkMock.On("CommitWrite", chunk, expectedHash, version, lcv+1).Return(errors.New("sample error for update_test"))
+		} else {
+			chunkMock.On("CommitWrite", chunk, expectedHash, version, lcv+1).Return(nil)
+			chunkMock.On("UpdateLatestVersion", chunk, version, lcv+1).Return(nil)
+		}
+	}
+
+	if deleting {
+		metadataMock.On("ReadEntry", chunk).Return(apis.MetadataEntry{
+			MostRecentVersion:   0xFFFFFFFFFFFFFFFF,
+			LastConsumedVersion: 0,
+			Replicas:            chunkserverIDs,
+		}, nil)
+	} else if exists {
+		metadataMock.On("ReadEntry", chunk).Return(apis.MetadataEntry{
+			MostRecentVersion:   version + apis.Version(versionRelative),
+			LastConsumedVersion: lcv,
+			Replicas:            chunkserverIDs,
+		}, nil)
+		if versionRelative == 0 {
+			metadataMock.On("UpdateEntry", chunk, apis.MetadataEntry{
+				MostRecentVersion:   version,
+				LastConsumedVersion: lcv,
+				Replicas:            chunkserverIDs,
+			}, apis.MetadataEntry{
+				MostRecentVersion:   version,
+				LastConsumedVersion: lcv + 1,
+				Replicas:            chunkserverIDs,
+			}).Return(nil)
+			if expectSuccess {
+				metadataMock.On("UpdateEntry", chunk, apis.MetadataEntry{
+					MostRecentVersion:   version,
+					LastConsumedVersion: lcv + 1,
+					Replicas:            chunkserverIDs,
+				}, apis.MetadataEntry{
+					MostRecentVersion:   lcv + 1,
+					LastConsumedVersion: lcv + 1,
+					Replicas:            chunkserverIDs,
+				}).Return(nil)
+			}
+		}
+	} else {
+		metadataMock.On("ReadEntry", chunk).Return(apis.MetadataEntry{}, errors.New("sample error in update_test"))
+	}
+
+	result, err := updater.CommitWrite(chunk, version, expectedHash)
+	if expectSuccess {
+		assert.NoError(t, err)
+		assert.Equal(t, lcv+1, result)
+	} else {
+		assert.Error(t, err)
+	}
+}
+
 // test case covers: doesn't exist, n/a, n/a, n/a, no
+func TestCommitWrite_NoExist(t *testing.T) {
+	GenericTestCommitWrite(t, false, false, nil, 0)
+}
 // test case covers: exists, 0, 0, n/a, no
+func TestCommitWrite_NoReplicas(t *testing.T) {
+	GenericTestCommitWrite(t, true, false, nil, 0)
+}
 // test case covers: exists, 1, 0, matches, yes
+func TestCommitWrite_OneReplica_Pass(t *testing.T) {
+	GenericTestCommitWrite(t, true, false, []bool { false }, 0)
+}
 // test case covers: exists, >1, >0, matches, no
+func TestCommitWrite_ManyReplicas_Fail(t *testing.T) {
+	GenericTestCommitWrite(t, true, false, []bool { false, false, true, false }, 0)
+}
 // test case covers: exists, >1, 0, matches, yes
+func TestCommitWrite_ManyReplicas_Pass(t *testing.T) {
+	GenericTestCommitWrite(t, true, false, []bool { false, false, false, false }, 0)
+}
 // test case covers: exists, 1, 0, request newer, no
+func TestCommitWrite_OneReplicas_TooNew(t *testing.T) {
+	GenericTestCommitWrite(t, true, false, []bool { false, false, false, false }, 1)
+}
 // test case covers: exists, 1, 0, request older, no
+func TestCommitWrite_OneReplicas_TooOld(t *testing.T) {
+	GenericTestCommitWrite(t, true, false, []bool { false, false, false, false }, -1)
+}
 // test case covers: currently deleting, 1, 0, matches, no
+func TestCommitWrite_CurrentlyDeleting(t *testing.T) {
+	GenericTestCommitWrite(t, true, true, []bool { false }, 0)
+}
 
 //   Delete
 //     chunk: exists, doesn't exist, currently deleting
