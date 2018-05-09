@@ -646,12 +646,163 @@ func TestCommitWrite_CurrentlyDeleting(t *testing.T) {
 //     version: matches, request newer, request older
 //     success: yes, no
 
+func GenericTestDelete(t *testing.T, exists bool, deleting bool, replicaFailsList []bool, failDelete bool, versionRelative int) {
+	cache := &rpc.MockCache{
+		Chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
+	}
+
+	etcdMock := &mocks.EtcdInterface{}
+	metadataMock := &mocks2.UpdaterMetadata{}
+	allMocks := []*mock.Mock{&etcdMock.Mock, &metadataMock.Mock}
+
+	updater := NewUpdater(cache, etcdMock, metadataMock)
+	chunk := apis.ChunkNum(rand.Uint64())
+	otherChunk := apis.ChunkNum(rand.Uint64())
+	version := apis.Version(rand.Uint32() + 5)
+
+	var chunkserverIDs []apis.ServerID
+	var chunkserverAddresses []apis.ServerAddress
+
+	expectSuccess := exists && !deleting && !failDelete && versionRelative == 0
+
+	// prepare mock operations!
+
+	for csI, fail := range replicaFailsList {
+		expectSuccess = expectSuccess && !fail
+		replicaID := apis.ServerID(rand.Uint32())
+		name := apis.ServerName(fmt.Sprintf("chunkserver-%d", csI))
+		address := apis.ServerAddress(fmt.Sprintf("address-%d", rand.Uint64()))
+
+		chunkserverIDs = append(chunkserverIDs, replicaID)
+		chunkserverAddresses = append(chunkserverAddresses, address)
+
+		chunkMock := &mocks.Chunkserver{}
+		allMocks = append(allMocks, &chunkMock.Mock)
+
+		cache.Chunkservers[address] = chunkMock
+
+		etcdMock.On("GetNameByID", replicaID).Return(name, nil)
+		etcdMock.On("GetAddress", name, apis.CHUNKSERVER).Return(address, nil)
+
+		if fail {
+			chunkMock.On("ListAllChunks").Return(nil, errors.New("sample error for update_test"))
+		} else {
+			// afterwards
+			if failDelete {
+				chunkMock.On("ListAllChunks").Return([]struct {
+					Chunk   apis.ChunkNum
+					Version apis.Version
+				}{
+					{chunk, version + 1},
+					{otherChunk, version},
+					{otherChunk, 3},
+					{otherChunk, version + 1},
+				}, nil)
+			} else {
+				chunkMock.On("ListAllChunks").Return([]struct {
+					Chunk   apis.ChunkNum
+					Version apis.Version
+				}{
+					{otherChunk, version},
+					{otherChunk, 3},
+					{otherChunk, version + 1},
+				}, nil)
+			}
+			// beforehand
+			chunkMock.On("ListAllChunks").Return([]struct {
+				Chunk apis.ChunkNum
+				Version apis.Version
+			}{
+				{chunk, version},
+				{chunk, version + 1},
+				{otherChunk, version},
+				{otherChunk, 3},
+				{otherChunk, version + 1},
+			}, nil)
+			chunkMock.On("Delete", chunk, version).Return(nil)
+			if failDelete {
+				chunkMock.On("Delete", chunk, version + 1).Return(errors.New("sample deletion error"))
+			} else {
+				chunkMock.On("Delete", chunk, version + 1).Return(nil)
+			}
+		}
+	}
+
+	if deleting {
+		metadataMock.On("ReadEntry", chunk).Return(apis.MetadataEntry{
+			MostRecentVersion:   0xFFFFFFFFFFFFFFFF,
+			LastConsumedVersion: 0,
+			Replicas:            chunkserverIDs,
+		}, nil)
+	} else if exists {
+		metadataMock.On("ReadEntry", chunk).Return(apis.MetadataEntry{
+			MostRecentVersion:   version + apis.Version(versionRelative),
+			LastConsumedVersion: version + apis.Version(versionRelative),
+			Replicas:            chunkserverIDs,
+		}, nil)
+		if versionRelative == 0 {
+			metadataMock.On("UpdateEntry", chunk, apis.MetadataEntry{
+				MostRecentVersion:   version,
+				LastConsumedVersion: version + apis.Version(versionRelative),
+				Replicas:            chunkserverIDs,
+			}, apis.MetadataEntry{
+				MostRecentVersion:   0xFFFFFFFFFFFFFFFF,
+				LastConsumedVersion: 0,
+				Replicas:            chunkserverIDs,
+			}).Return(nil)
+			if expectSuccess {
+				metadataMock.On("DeleteEntry", chunk, apis.MetadataEntry{
+					MostRecentVersion:   0xFFFFFFFFFFFFFFFF,
+					LastConsumedVersion: 0,
+					Replicas:            chunkserverIDs,
+				}).Return(nil)
+			}
+		}
+	} else {
+		metadataMock.On("ReadEntry", chunk).Return(apis.MetadataEntry{}, errors.New("sample error in update_test"))
+	}
+
+	err := updater.Delete(chunk, version)
+	if expectSuccess {
+		assert.NoError(t, err)
+	} else {
+		assert.Error(t, err)
+	}
+}
+
 // test case covers: doesn't exist, n/a, n/a, n/a, n/a, no
+func TestDelete_NoExist(t *testing.T) {
+	GenericTestDelete(t, false, false, nil, false, 0)
+}
 // test case covers: exists, 0, 0, 0, n/a, yes
+func TestDelete_NoReplicas(t *testing.T) {
+	GenericTestDelete(t, true, false, nil, false, 0)
+}
 // test case covers: exists, 1, 0, 0, matches, yes
+func TestDelete_OneReplica(t *testing.T) {
+	GenericTestDelete(t, true, false, []bool { false }, false, 0)
+}
 // test case covers: exists, 1, 0, 0, request newer, no
+func TestDelete_OneReplica_Newer(t *testing.T) {
+	GenericTestDelete(t, true, false, []bool { false }, false, 1)
+}
 // test case covers: exists, 1, 0, 0, request older, no
+func TestDelete_OneReplica_Older(t *testing.T) {
+	GenericTestDelete(t, true, false, []bool { false }, false, -1)
+}
 // test case covers: exists, >1, 0, 0, matches, yes
+func TestDelete_ManyReplicas(t *testing.T) {
+	GenericTestDelete(t, true, false, []bool { false, false, false }, false, 0)
+}
 // test case covers: exists, >1, >0, 0, matches, no
-// test case covers: exists, >1, 0, >0, matches, no
+func TestDelete_ManyReplicas_FailList(t *testing.T) {
+	GenericTestDelete(t, true, false, []bool { false, true, false }, false, 0)
+}
+// test case covers: exists, 1, 0, >0, matches, no
+func TestDelete_OneReplica_FailDelete(t *testing.T) {
+	GenericTestDelete(t, true, false, []bool { false }, true, 0)
+}
 // test case covers: currently deleting, 1, 0, 0, matches, no
+func TestDelete_CurrentlyDeleting(t *testing.T) {
+	GenericTestDelete(t, true, true, []bool { false }, false, 0)
+}
