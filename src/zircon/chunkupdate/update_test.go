@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/assert"
+	"zircon/chunkserver"
 )
 
 // Testing strategy split throughout file
@@ -25,7 +26,7 @@ func GenericTestPerformRead(t *testing.T, offset uint32, length uint32, replicaF
 	cache := &rpc.MockCache{
 		Chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
 	}
-	allMocks := []mock.Mock{}
+	var allMocks []mock.Mock
 
 	chunk := apis.ChunkNum(rand.Uint64())
 	version := apis.Version(rand.Uint64())
@@ -149,20 +150,138 @@ func TestPerformRead_ManyReplicas_PassAll(t *testing.T) {
 //     # of failing chunkservers: 0, 1, 1<x<all, all
 //     write successful: yes, no
 
+func GenericTestPrepareWrite(t *testing.T, offset uint32, length uint32, replicaFails []bool) {
+	cache := &rpc.MockCache{
+		Chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
+	}
+	var allMocks []mock.Mock
+
+	chunk := apis.ChunkNum(rand.Uint64())
+	data := make([]byte, length)
+	for i := 0; i < int(length); i++ {
+		data[i] = "fake"[i % 4]
+	}
+
+	expectedHash := apis.CalculateCommitHash(offset, data)
+
+	// ** prepare mocked etcd responses and chunkservers **
+
+	expectSuccess := true
+	var replicaAddresses []apis.ServerAddress
+
+	for id, fail := range replicaFails {
+		expectSuccess = expectSuccess && !fail
+
+		address := apis.ServerAddress(fmt.Sprintf("chunk-address-%d", id))
+
+		replicaAddresses = append(replicaAddresses, address)
+
+		chunkMock := &mocks.Chunkserver{}
+		chunkChatter, err := chunkserver.WithChatter(chunkMock, cache)
+		assert.NoError(t, err)
+		cache.Chunkservers[address] = chunkChatter
+		allMocks = append(allMocks, chunkMock.Mock)
+
+		if fail {
+			chunkMock.On("StartWrite", chunk, offset, data).Return(errors.New("sample failure for update_test"))
+		} else {
+			chunkMock.On("StartWrite", chunk, offset, data).Return(nil)
+		}
+	}
+
+	if offset + length > apis.MaxChunkSize || len(replicaFails) == 0 {
+		expectSuccess = false
+	}
+
+	// now perform operation
+
+	hash, err := (&Reference{
+		Replicas: replicaAddresses,
+		Version: 5,
+		Chunk: chunk,
+	}).PrepareWrite(cache, offset, data)
+
+	if expectSuccess {
+		assert.NoError(t, err)
+		assert.Equal(t, expectedHash, hash)
+	} else {
+		assert.Error(t, err)
+	}
+
+	for _, m := range allMocks {
+		m.AssertExpectations(t)
+	}
+}
+//   PrepareWrite partitions:
+//     offset+length = 0, 0<x<apis.MaxChunkSize, apis.MaxChunkSize, >apis.MaxChunkSize
+//     replica # = 0, 1, >1
+//     # of failing chunkservers: 0, 1, 1<x<all, all
+//     write successful: yes, no
+
 // test case covers: 0, 0, 0, no
+func TestPrepareWrite_NoReplicas_Empty(t *testing.T) {
+	GenericTestPrepareWrite(t, 1, 0, nil)
+}
 // test case covers: 0<x<apis.MaxChunkSize, 0, 0, no
+func TestPrepareWrite_NoReplicas(t *testing.T) {
+	GenericTestPrepareWrite(t, 2, 128, nil)
+}
 // test case covers: 0, 1, 0, yes
+func TestPrepareWrite_OneReplica_Empty(t *testing.T) {
+	GenericTestPrepareWrite(t, 3, 0, []bool{ false })
+}
 // test case covers: 0, 1, 1, no
+func TestPrepareWrite_OneReplica_Fail_Empty(t *testing.T) {
+	GenericTestPrepareWrite(t, 4, 0, []bool{ true })
+}
 // test case covers: 0, >1, 0, yes
-// test case covers: 0, 1, 1<x<all, no
+func TestPrepareWrite_ManyReplicas_Empty(t *testing.T) {
+	GenericTestPrepareWrite(t, 5, 0, []bool{ false, false, false })
+}
+// test case covers: 0, >1, 1<x<all, no
+func TestPrepareWrite_ManyReplicas_PartialFail_Empty(t *testing.T) {
+	GenericTestPrepareWrite(t, 6, 0, []bool{ false, true, false })
+}
 // test case covers: apis.MaxChunkSize, 1, 0, yes
+func TestPrepareWrite_OneReplica_Max(t *testing.T) {
+	GenericTestPrepareWrite(t, 0, apis.MaxChunkSize, []bool{ false })
+	GenericTestPrepareWrite(t, 7, apis.MaxChunkSize - 7, []bool{ false })
+}
 // test case covers: >apis.MaxChunkSize, 1, 0, no
+func TestPrepareWrite_OneReplica_OverMax(t *testing.T) {
+	GenericTestPrepareWrite(t, 0, apis.MaxChunkSize + 1, []bool{ false })
+	GenericTestPrepareWrite(t, 8, apis.MaxChunkSize - 7, []bool{ false })
+}
 // test case covers: 0<x<apis.MaxChunkSize, 1, 0, yes
+func TestPrepareWrite_OneReplica(t *testing.T) {
+	GenericTestPrepareWrite(t, 9, 128, []bool { false })
+}
 // test case covers: 0<x<apis.MaxChunkSize, 1, 1, no
-// test case covers: 0<x<apis.MaxChunkSize, >1, 1, no  (note: tries multiple times to ensure consistency)
+func TestPrepareWrite_OneReplica_Fail(t *testing.T) {
+	GenericTestPrepareWrite(t, 10, 128, []bool { true })
+}
+// test case covers: 0<x<apis.MaxChunkSize, >1, 1, no  (note: tries many times to ensure consistency)
+func TestPrepareWrite_ManyReplicas_ExactlyOneFail(t *testing.T) {
+	for i := uint32(0); i < 50; i++ {
+		for j := 0; j < 6; j++ {
+			fails := make([]bool, 6)
+			fails[j] = true
+			GenericTestPrepareWrite(t, i, 128, fails)
+		}
+	}
+}
 // test case covers: 0<x<apis.MaxChunkSize, >1, all, no
-// test case covers: 0<x<apis.MaxChunkSize, >1, all, no
+func TestPrepareWrite_ManyReplicas_AllFail(t *testing.T) {
+	GenericTestPrepareWrite(t, 11, 128, []bool { true, true, true, true, true })
+}
+// test case covers: 0<x<apis.MaxChunkSize, >1, 1<x<all, no
+func TestPrepareWrite_ManyReplicas_SomeFail(t *testing.T) {
+	GenericTestPrepareWrite(t, 12, 128, []bool { false, true, true, false, true, false })
+}
 // test case covers: 0<x<apis.MaxChunkSize, >1, 0, yes
+func TestPrepareWrite_ManyReplicas(t *testing.T) {
+	GenericTestPrepareWrite(t, 13, 512, []bool { false, false, false, false, false, false })
+}
 
 //   ReadMeta partitions:
 //     chunk: exists, doesn't exist, currently deleting

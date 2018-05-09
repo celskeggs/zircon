@@ -81,7 +81,7 @@ func (ref *Reference) PrepareWrite(cache rpc.ConnectionCache, offset uint32, dat
 	if len(ref.Replicas) == 0 {
 		return "", errors.New("cannot perform write; there are no replicas")
 	}
-	addresses := make([]apis.ServerAddress, len(ref.Replicas) - 1)
+	addresses := make([]apis.ServerAddress, len(ref.Replicas))
 	for i, ii := range rand.Perm(len(ref.Replicas)) {
 		addresses[i] = ref.Replicas[ii]
 	}
