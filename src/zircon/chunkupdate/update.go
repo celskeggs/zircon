@@ -159,7 +159,22 @@ func (f *updater) New(replicaNum int) (apis.ChunkNum, error) {
 	// TODO: how does garbage collection know not to delete this until the client disconnects early or this server crashes?
 	if err != nil {
 		// oh well, it'll get cleaned up by garbage collection
-		return 0, err
+		return 0, fmt.Errorf("[update.go/MUE] %v", err)
+	}
+	// now that we've established the replicas for this chunk, we need to go and tell the chunkservers to store this data
+	for _, replica := range replicas {
+		address, err := AddressForChunkserver(f.etcd, replica)
+		if err != nil {
+			return 0, fmt.Errorf("[update.go/AFC] %v", err)
+		}
+		cs, err := f.cache.SubscribeChunkserver(address)
+		if err != nil {
+			return 0, fmt.Errorf("[update.go/CSC] %v", err)
+		}
+		err = cs.Add(chunk, []byte{}, 0)
+		if err != nil {
+			return 0, fmt.Errorf("[update.go/CSA] %v", err)
+		}
 	}
 	return chunk, nil
 }
