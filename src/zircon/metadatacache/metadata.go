@@ -248,26 +248,31 @@ func updateBitsetInData(bitset []byte, index uint32, value bool) (uint32, []byte
 // Update whether a chunk has been allocated or not in the bitset part of a certain metachunk.
 // Returns 'true' if the request succeeded, false if it was clobbered, and error if anything else happened.
 func (mc *metadatacache) updateBitset(metachunk apis.MetadataID, index uint32, value bool) (bool, error) {
-	data, version, _, err := mc.leasing.Read(metachunk)
-	if err != nil {
-		return false, err
+	for {
+		data, version, _, err := mc.leasing.Read(metachunk)
+		if err != nil {
+			return false, err
+		}
+
+		bitset := data[0:apis.BitsetSize]
+
+		existingValue := getBitsetInData(data[0:apis.BitsetSize], index)
+		if existingValue == value {
+			return false, nil
+		}
+
+		offset, newData := updateBitsetInData(bitset, index, value)
+
+		retver, _, err := mc.leasing.Write(metachunk, version, offset, newData)
+		if err == nil {
+			// success!
+			return true, nil
+		} else if retver == 0 {
+			// actual error; not version contention
+			return false, err
+		}
+		// otherwise, it's just version contention; go around
 	}
-
-	bitset := data[0:apis.BitsetSize]
-
-	existingValue := getBitsetInData(data[0:apis.BitsetSize], index)
-	if existingValue == value {
-		return false, nil
-	}
-
-	offset, newData := updateBitsetInData(bitset, index, value)
-
-	_, _, err = mc.leasing.Write(metachunk, version, offset, newData)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 // Tries to find a free chunk anywhere. Returns (metadataID, index, error)

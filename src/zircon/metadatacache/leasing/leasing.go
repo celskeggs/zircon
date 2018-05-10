@@ -235,7 +235,7 @@ func (l *Leasing) Read(metachunk apis.MetadataID) ([]byte, apis.Version, apis.Se
 // iff the problem was something else.
 func (l *Leasing) Write(metachunk apis.MetadataID, version apis.Version, offset uint32, data []byte) (apis.Version, apis.ServerName, error) {
 	if offset + uint32(len(data)) > apis.MaxChunkSize {
-		return 0, apis.NoRedirect, errors.New("write is too large!")
+		return 0, apis.NoRedirect, errors.New("write is too large")
 	}
 	if version == 0 {
 		return 0, apis.NoRedirect, errors.New("version cannot be zero to Leasing.Write")
