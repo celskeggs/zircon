@@ -111,6 +111,9 @@ func (m *MemoryStorage) DeleteVersion(chunk apis.ChunkNum, version apis.Version)
 		return fmt.Errorf("chunk/version combination does not exist: %d/%d", chunk, version)
 	}
 	delete(versionMap, version)
+	if len(versionMap) == 0 {
+		delete(m.chunks, chunk)
+	}
 	return nil
 }
 

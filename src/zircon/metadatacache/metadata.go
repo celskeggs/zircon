@@ -210,7 +210,23 @@ func (mc *metadatacache) NewEntry() (apis.ChunkNum, error) {
 		}
 
 		if noclobber {
-			return entryAndBlockToChunkNum(metachunk, index), nil
+			chunk := entryAndBlockToChunkNum(metachunk, index)
+
+			for {
+				_, version, _, err := mc.leasing.Read(metachunk)
+				if err != nil {
+					// TODO: what now? how do we recover this storage space?
+					return 0, fmt.Errorf("[metadata.go/MLR] %v", err)
+				}
+				nver, _, err := mc.leasing.Write(metachunk, version, entryNumberToOffset(index), make([]byte, apis.EntrySize))
+				if err == nil {
+					return chunk, nil
+				} else if nver == 0 {
+					// TODO: what now? how do we recover this storage space?
+					return 0, fmt.Errorf("[metadata.go/MLW] %v", err)
+				}
+				// version mismatch; go around again!
+			}
 		}
 		// welp... guess we gotta go around again! someone else messed with our chunk.
 	}

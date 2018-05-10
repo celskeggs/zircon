@@ -358,7 +358,7 @@ func TestDeletion(t *testing.T) {
 	initial := usage()
 
 	pass := make(chan bool)
-	count := 50
+	count := 10
 
 	for i := 0; i < count; i++ {
 		go func() {
@@ -367,7 +367,7 @@ func TestDeletion(t *testing.T) {
 				pass <- ok
 			}()
 
-			for j := 0; j < 50; j++ {
+			for j := 0; j < 10; j++ {
 				chunk, err := client.New()
 				assert.NoError(t, err)
 

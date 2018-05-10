@@ -349,5 +349,9 @@ func (f *updater) Delete(chunk apis.ChunkNum, version apis.Version) error {
 		}
 	}
 	// Now that all of the replica data is gone, we can get rid of the metadata
-	return f.metadata.DeleteEntry(chunk, entry)
+	err = f.metadata.DeleteEntry(chunk, entry)
+	if err != nil {
+		return err
+	}
+	return nil
 }
