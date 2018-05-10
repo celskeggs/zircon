@@ -88,6 +88,9 @@ func (r *reselectingMetadataUpdater) ReadEntry(chunk apis.ChunkNum) (apis.Metada
 		entry, redirect, err = cache.ReadEntry(chunk)
 		return
 	})
+	if err == nil && len(entry.Replicas) == 0 {
+		return apis.MetadataEntry{}, fmt.Errorf("found zero-length replica list while reading from metadata cache")
+	}
 	return entry, err
 }
 

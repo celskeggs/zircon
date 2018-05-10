@@ -82,10 +82,12 @@ func TestSimpleClientReadWrite(t *testing.T) {
 	cn, err := client.New()
 	require.NoError(t, err)
 
-	_, _, err = client.Read(cn, 0, 1)
-	assert.Error(t, err)
+	data, ver, err := client.Read(cn, 0, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, apis.Version(0), ver)
+	assert.Equal(t, []byte{0}, data)
 
-	ver, err := client.Write(cn, 0, apis.AnyVersion, []byte("hello, world!"))
+	ver, err = client.Write(cn, 0, apis.AnyVersion, []byte("hello, world!"))
 	require.NoError(t, err)
 	assert.True(t, ver > 0)
 

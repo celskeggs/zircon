@@ -93,7 +93,7 @@ func (ref *Reference) PrepareWrite(cache rpc.ConnectionCache, offset uint32, dat
 	if err != nil {
 		return "", fmt.Errorf("[update.go/SWR] %v", err)
 	}
-	return apis.CalculateCommitHash(offset, data), err
+	return apis.CalculateCommitHash(offset, data), nil
 }
 
 type UpdaterMetadata interface {
@@ -180,6 +180,9 @@ func (f *updater) New(replicaNum int) (apis.ChunkNum, error) {
 }
 
 func (f *updater) getReplicaAddresses(entry apis.MetadataEntry) ([]apis.ServerAddress, error) {
+	if len(entry.Replicas) == 0 {
+		return nil, fmt.Errorf("no replica addresses provided to getReplicaAddresses")
+	}
 	addresses := make([]apis.ServerAddress, len(entry.Replicas))
 	for i, id := range entry.Replicas {
 		address, err := AddressForChunkserver(f.etcd, id)
@@ -218,7 +221,7 @@ func (f *updater) subscribeReplicas(entry apis.MetadataEntry) ([]apis.Chunkserve
 func (f *updater) ReadMeta(chunk apis.ChunkNum) (*Reference, error) {
 	entry, err := f.metadata.ReadEntry(chunk)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failure while reading metadata entry: %v", err)
 	}
 	if entry.MostRecentVersion > entry.LastConsumedVersion {
 		// then this chunk must be in the process of being deleted... don't let them read it!
@@ -226,7 +229,10 @@ func (f *updater) ReadMeta(chunk apis.ChunkNum) (*Reference, error) {
 	}
 	addresses, err := f.getReplicaAddresses(entry)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failure while getting metadata addresses: %v", err)
+	}
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("received zero-length address list for entry")
 	}
 	return &Reference{
 		Chunk: chunk,

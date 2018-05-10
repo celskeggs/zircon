@@ -5,6 +5,7 @@ import (
 	"zircon/apis"
 	"zircon/rpc"
 	"zircon/chunkupdate"
+	"fmt"
 )
 
 type client struct {
@@ -55,10 +56,13 @@ func (c *client) Read(ref apis.ChunkNum, offset uint32, length uint32) ([]byte, 
 func (c *client) Write(ref apis.ChunkNum, offset uint32, version apis.Version, data []byte) (apis.Version, error) {
 	rversion, addresses, err := c.fe.ReadMetadataEntry(ref)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("[client.go/RME] %v", err)
+	}
+	if len(addresses) == 0 {
+		return 0, fmt.Errorf("given zero replicas when reading metadata entry")
 	}
 	if rversion != version {
-		return 0, errors.New("version mismatch")
+		return rversion, errors.New("version mismatch")
 	}
 	reference := &chunkupdate.Reference{
 		Chunk:    ref,
@@ -67,9 +71,13 @@ func (c *client) Write(ref apis.ChunkNum, offset uint32, version apis.Version, d
 	}
 	hash, err := reference.PrepareWrite(c.cache, offset, data)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("[client.go/RPW] %v", err)
 	}
-	return c.fe.CommitWrite(ref, version, hash)
+	ver, err := c.fe.CommitWrite(ref, version, hash)
+	if err != nil {
+		return ver, fmt.Errorf("[client.go/FCW] %v", err)
+	}
+	return ver, nil
 }
 
 // Destroy a chunk, given a specific version number. Version checking works the same as for Write.

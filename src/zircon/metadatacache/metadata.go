@@ -1,14 +1,13 @@
 package metadatacache
 
 import (
-	"bytes"
-	"encoding/gob"
 	"errors"
 	"zircon/apis"
 	"zircon/rpc"
 	"zircon/metadatacache/leasing"
 	"fmt"
 	"zircon/util"
+	"encoding/binary"
 )
 
 type metadatacache struct {
@@ -57,7 +56,7 @@ func (mc *metadatacache) ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, api
 
 // Update the metadata entry of a particular chunk.
 // If another server holds the block containing that entry, returns that server's name
-func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.MetadataEntry, entry apis.MetadataEntry) (apis.ServerName, error) {
+func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.MetadataEntry, newEntry apis.MetadataEntry) (apis.ServerName, error) {
 	metachunk, offset := chunkToBlockAndOffset(chunk)
 
 	for {
@@ -79,7 +78,7 @@ func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.Metadata
 			return apis.NoRedirect, errors.New("entry does not match previous expected entry")
 		}
 
-		updated, err := serializeEntry(entry)
+		updated, err := serializeEntry(newEntry)
 		if err != nil {
 			return apis.NoRedirect, fmt.Errorf("[metadata.go/SRE] %v", err)
 		}
@@ -89,6 +88,7 @@ func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.Metadata
 
 		_, owner, err = mc.leasing.Write(metachunk, version, offset, updated)
 		if err == nil {
+			// success!
 			return apis.NoRedirect, nil
 		} else if version == 0 {
 			return owner, fmt.Errorf("[metadata.go/MLW] %v", err)
@@ -140,31 +140,32 @@ func deserializeEntry(data []byte) (apis.MetadataEntry, error) {
 		return apis.MetadataEntry{}, nil
 	}
 
-	dec := gob.NewDecoder(bytes.NewReader(data))
 	var entry apis.MetadataEntry
-	err := dec.Decode(&entry)
+	entry.MostRecentVersion = apis.Version(binary.LittleEndian.Uint64(data))
+	entry.LastConsumedVersion = apis.Version(binary.LittleEndian.Uint64(data[8:]))
+	entry.Replicas = make([]apis.ServerID, data[16])
+	for i := 0; i < len(entry.Replicas); i++ {
+		entry.Replicas[i] = apis.ServerID(binary.LittleEndian.Uint32(data[20 + 4 * i:]))
+	}
 
-	return entry, err
+	return entry, nil
 }
 
 // Serialize a metadata entry using gob
 // Caps to a size that should be large enough, unless a ton of replicas are included
 func serializeEntry(entry apis.MetadataEntry) ([]byte, error) {
-	buf := bytes.NewBuffer(make([]byte, 0, apis.EntrySize))
-	enc := gob.NewEncoder(buf)
-	err := enc.Encode(entry)
-	if err != nil {
-		return nil, err
+	data := make([]byte, apis.EntrySize)
+	binary.LittleEndian.PutUint64(data, uint64(entry.MostRecentVersion))
+	binary.LittleEndian.PutUint64(data[8:], uint64(entry.LastConsumedVersion))
+	if len(entry.Replicas) >= 256 || len(entry.Replicas) > (apis.EntrySize - 20) / 4 {
+		return nil, fmt.Errorf("too many replicas: %d", len(entry.Replicas))
 	}
-	for buf.Len() < apis.EntrySize {
-		buf.WriteByte(0)
+	data[16] = uint8(len(entry.Replicas))
+	for i := 0; i < len(entry.Replicas); i++ {
+		binary.LittleEndian.PutUint32(data[20 + 4 * i:], uint32(entry.Replicas[i]))
 	}
 
-	result := buf.Bytes()
-	if len(result) != apis.EntrySize {
-		return nil, errors.New("entry missized")
-	}
-	return result, nil
+	return data, nil
 }
 
 // Compute the metadata block, and offset within the block, that a certain chunk belongs to
