@@ -55,6 +55,15 @@ type EtcdInterface interface {
 	// If the previous value does not match the current contents, fails.
 	UpdateMetametadata(blockid MetadataID, previous MetadataEntry, data MetadataEntry) error
 
+	// The syncserver is just a direct etcd interface; incorporate it like this.
+	SyncServerDirect
+
+	// Writes the filesystem root chunk number
+	WriteFSRoot(chunk ChunkNum) (error)
+
+	// Reads the filesystem root chunk number, or 0 if nonexistent
+	ReadFSRoot() (ChunkNum, error)
+
 	// tear down this connection
 	Close() error
 }

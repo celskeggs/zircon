@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package zircon.rpc.twirp;
+option go_package = "zircon/rpc/twirp";
+
+service SyncServer {
+    rpc StartSync(SyncServer_Uint64) returns (SyncServer_Uint64);
+    rpc UpgradeSync(SyncServer_Uint64) returns (SyncServer_Uint64);
+    rpc ReleaseSync(SyncServer_Uint64) returns (SyncServer_Nothing);
+    rpc ConfirmSync(SyncServer_Uint64) returns (SyncServer_Bool);
+    rpc GetFSRoot(SyncServer_Nothing) returns (SyncServer_Uint64);
+}
+
+message SyncServer_Uint64 {
+    uint64 value = 1;
+}
+
+message SyncServer_Bool {
+    bool value = 1;
+}
+
+message SyncServer_Nothing {
+    // nothing
+}

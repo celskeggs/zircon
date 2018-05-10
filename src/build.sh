@@ -31,7 +31,7 @@ protoc --twirp_out=. --go_out=. ./zircon/rpc/twirp/*.proto
 
 # generate mockery mocks
 
-for interface in Chunkserver Frontend MetadataCache EtcdInterface
+for interface in Chunkserver Frontend MetadataCache EtcdInterface SyncServer
 do
 	mockery -dir zircon/apis/ "-name=${interface}" -output zircon/apis/mocks/
 done

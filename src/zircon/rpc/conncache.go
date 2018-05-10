@@ -23,6 +23,10 @@ type ConnectionCache interface {
 	// Failure to connect does *not* cause an error here; just timeouts when trying to call specific methods.
 	SubscribeMetadataCache(address apis.ServerAddress) (apis.MetadataCache, error)
 
+	// Subscribes to a sync server over the network on a specific address.
+	// Failure to connect does *not* cause an error here; just timeouts when trying to call specific methods.
+	SubscribeSyncServer(address apis.ServerAddress) (apis.SyncServer, error)
+
 	// Closes as many open connections as possible. May disrupt current operations. Should not be necessary to call if
 	// no subscriptions have been attempted.
 	CloseAll()
@@ -33,6 +37,7 @@ type conncache struct {
 	chunkservers   map[apis.ServerAddress]apis.Chunkserver
 	frontends      map[apis.ServerAddress]apis.Frontend
 	metadatacaches map[apis.ServerAddress]apis.MetadataCache
+	syncservers    map[apis.ServerAddress]apis.SyncServer
 	client         *http.Client
 	transport      *http.Transport
 	closed         bool
@@ -60,6 +65,7 @@ func NewConnectionCache() ConnectionCache {
 		chunkservers:   map[apis.ServerAddress]apis.Chunkserver{},
 		frontends:      map[apis.ServerAddress]apis.Frontend{},
 		metadatacaches: map[apis.ServerAddress]apis.MetadataCache{},
+		syncservers:    map[apis.ServerAddress]apis.SyncServer{},
 	}
 }
 
@@ -122,6 +128,27 @@ func (c *conncache) SubscribeMetadataCache(address apis.ServerAddress) (apis.Met
 			return nil, err
 		}
 		c.metadatacaches[address] = newConnection
+		return newConnection, nil
+	}
+}
+
+func (c *conncache) SubscribeSyncServer(address apis.ServerAddress) (apis.SyncServer, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil, errors.New("attempt to use closed connection cache")
+	}
+
+	existingConnection, exists := c.syncservers[address]
+	if exists {
+		return existingConnection, nil
+	} else {
+		newConnection, err := UncachedSubscribeSyncServer(address, c.client)
+		if err != nil {
+			return nil, err
+		}
+		c.syncservers[address] = newConnection
 		return newConnection, nil
 	}
 }
