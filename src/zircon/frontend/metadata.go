@@ -73,11 +73,11 @@ func (r *reselectingMetadataUpdater) runRedirectionLoop(attempt func(apis.Metada
 func (r *reselectingMetadataUpdater) NewEntry() (apis.ChunkNum, error) {
 	cache, err := r.getMetadataCache()
 	if err != nil {
-		return 0, fmt.Errorf("[metadata.go:GMC] %v", err)
+		return 0, fmt.Errorf("[metadata.go/GMC] %v", err)
 	}
 	chunk, err := cache.NewEntry()
 	if err != nil {
-		return 0, fmt.Errorf("[metadata.go:CNE] %v", err)
+		return 0, fmt.Errorf("[metadata.go/CNE] %v", err)
 	}
 	return chunk, nil
 }

@@ -10,6 +10,7 @@ import (
 	"zircon/frontend"
 	"zircon/rpc"
 	"zircon/util"
+	"zircon/metadatacache"
 )
 
 // NOTE: Only simple tests are provided here. Everything else should either go into control/client_test.go or should be
@@ -19,25 +20,22 @@ import (
 func PrepareNetworkedCluster(t *testing.T) (fe apis.Client, teardown func()) {
 	cache := rpc.NewConnectionCache()
 	teardowns := &util.MultiTeardown{}
-	cs0, _, teardown1 := chunkserver.NewTestChunkserver(t, cache)
-	cs1, _, teardown2 := chunkserver.NewTestChunkserver(t, cache)
-	cs2, _, teardown3 := chunkserver.NewTestChunkserver(t, cache)
-	teardowns.Add(teardown1, teardown2, teardown3)
-	teardown4, cs0addr, err := rpc.PublishChunkserver(cs0, "127.0.0.1:0")
-	assert.NoError(t, err)
-	teardowns.Add(func() { teardown4(true) })
-	teardown5, cs1addr, err := rpc.PublishChunkserver(cs1, "127.0.0.1:0")
-	assert.NoError(t, err)
-	teardowns.Add(func() { teardown5(true) })
-	teardown6, cs2addr, err := rpc.PublishChunkserver(cs2, "127.0.0.1:0")
-	assert.NoError(t, err)
-	teardowns.Add(func() { teardown6(true) })
-
-	// TODO
-	assert.Fail(t, "we need to do something with these addresses: %s, %s, %s", string(cs0addr), string(cs1addr), string(cs2addr))
 
 	etcds, teardown7 := etcd.PrepareSubscribeForTesting(t)
 	teardowns.Add(teardown7)
+
+	for _, name := range []apis.ServerName{"cs0", "cs1", "cs2"} {
+		cs, _, teardown1 := chunkserver.NewTestChunkserver(t, cache)
+		teardowns.Add(teardown1)
+
+		teardown4, csaddr, err := rpc.PublishChunkserver(cs, "127.0.0.1:0")
+		assert.NoError(t, err)
+		teardowns.Add(func() { teardown4(true) })
+
+		etcdif, teardown := etcds(name)
+		teardowns.Add(teardown)
+		etcdif.UpdateAddress(csaddr, apis.CHUNKSERVER)
+	}
 
 	config := Configuration{}
 
@@ -48,11 +46,19 @@ func PrepareNetworkedCluster(t *testing.T) (fe apis.Client, teardown func()) {
 		assert.NoError(t, err)
 		teardown9, address, err := rpc.PublishFrontend(fen, "127.0.0.1:0")
 		assert.NoError(t, err)
-
-		assert.NoError(t, etcdn.UpdateAddress(address, apis.FRONTEND))
 		teardowns.Add(teardown8, func() {
 			teardown9(true)
 		})
+
+		assert.NoError(t, etcdn.UpdateAddress(address, apis.FRONTEND))
+
+		mdc, err := metadatacache.NewCache(cache, etcdn)
+		assert.NoError(t, err)
+		teardown10, mdcaddress, err := rpc.PublishMetadataCache(mdc, "127.0.0.1:0")
+		assert.NoError(t, err)
+		teardowns.Add(func() { teardown10(true) })
+
+		assert.NoError(t, etcdn.UpdateAddress(mdcaddress, apis.METADATACACHE))
 
 		config.FrontendAddresses = append(config.FrontendAddresses, address)
 	}
@@ -73,10 +79,12 @@ func TestSimpleClientReadWrite(t *testing.T) {
 	cn, err := client.New()
 	assert.NoError(t, err)
 
-	_, _, err = client.Read(cn, 0, 1)
-	assert.Error(t, err)
+	data, ver, err := client.Read(cn, 0, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, apis.Version(0), ver)
+	assert.Equal(t, []byte{0}, data)
 
-	ver, err := client.Write(cn, 0, apis.AnyVersion, []byte("hello, world!"))
+	ver, err = client.Write(cn, 0, apis.AnyVersion, []byte("hello, world!"))
 	assert.NoError(t, err)
 	assert.True(t, ver > 0)
 
