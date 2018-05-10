@@ -11,12 +11,16 @@ import (
 	"testing"
 	"time"
 	"zircon/apis"
+	"path"
 )
 
 const TestingLeaseTimeout = time.Second
 
 func newConfig(dirname string, serverURL string, advertiseURL string) (*embed.Config, error) {
 	ec := embed.NewConfig()
+
+	ec.Logger = "zap"
+	ec.LogOutputs = []string { path.Join(dirname, "mock.log") }
 
 	listenURL, err := url.Parse(serverURL)
 	if err != nil {

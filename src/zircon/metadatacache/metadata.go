@@ -7,6 +7,7 @@ import (
 	"zircon/apis"
 	"zircon/rpc"
 	"zircon/metadatacache/leasing"
+	"fmt"
 )
 
 type metadatacache struct {
@@ -53,7 +54,7 @@ func (mc *metadatacache) ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, api
 	return entry, apis.NoRedirect, nil
 }
 
-// Update the metadate entry of a particular chunk.
+// Update the metadata entry of a particular chunk.
 // If another server holds the block containing that entry, returns that server's name
 func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.MetadataEntry, entry apis.MetadataEntry) (apis.ServerName, error) {
 	metachunk, offset := chunkToBlockAndOffset(chunk)
@@ -61,7 +62,7 @@ func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.Metadata
 	for {
 		data, version, owner, err := mc.leasing.Read(metachunk)
 		if err != nil {
-			return owner, err
+			return owner, fmt.Errorf("[metadata.go/MLR] %v", err)
 		}
 
 		found := getBitsetInData(data, chunkToEntryNumber(chunk))
@@ -71,7 +72,7 @@ func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.Metadata
 
 		entry, err := deserializeEntry(data[offset:offset+apis.EntrySize])
 		if err != nil {
-			return apis.NoRedirect, err
+			return apis.NoRedirect, fmt.Errorf("[metadata.go/DSE] %v", err)
 		}
 		if !entry.Equals(previous) {
 			return apis.NoRedirect, errors.New("entry does not match previous expected entry")
@@ -79,7 +80,7 @@ func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.Metadata
 
 		updated, err := serializeEntry(entry)
 		if err != nil {
-			return apis.NoRedirect, err
+			return apis.NoRedirect, fmt.Errorf("[metadata.go/SRE] %v", err)
 		}
 		if len(updated) != apis.EntrySize {
 			panic("postcondition on serializeEntry failed")
@@ -89,7 +90,7 @@ func (mc *metadatacache) UpdateEntry(chunk apis.ChunkNum, previous apis.Metadata
 		if err == nil {
 			return apis.NoRedirect, nil
 		} else if version == 0 {
-			return owner, err
+			return owner, fmt.Errorf("[metadata.go/MLW] %v", err)
 		}
 		// version mismatch; go around again and re-attempt changes
 	}
@@ -193,12 +194,12 @@ func (mc *metadatacache) NewEntry() (apis.ChunkNum, error) {
 	for {
 		metachunk, index, err := mc.findAnyFreeChunk()
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("[metadata.go/FFC] %v", err)
 		}
 
 		noclobber, err := mc.updateBitset(metachunk, index, true)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("[metadata.go/MUB] %v", err)
 		}
 
 		if noclobber {
@@ -267,7 +268,7 @@ func (mc *metadatacache) findAnyFreeChunk() (apis.MetadataID, uint32, error) {
 	// First, see if there is an open spot in a lease that we hold
 	metadataID, index, found, err := mc.findAnyLeasedFreeChunk()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("[metadata.go/FLC] %v", err)
 	}
 	if found {
 		return metadataID, index, nil
@@ -279,12 +280,12 @@ func (mc *metadatacache) findAnyFreeChunk() (apis.MetadataID, uint32, error) {
 		// TODO: what if one server runs through this a lot of times, and suddenly has everything claimed? inefficient!
 		metadataID, err := mc.leasing.GetOrCreateAnyUnleased()
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, fmt.Errorf("[metadata.go/GCU] %v", err)
 		}
 
 		index, found, err := mc.findFreeChunkIn(metadataID)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, fmt.Errorf("[metadata.go/FCI] %v", err)
 		}
 
 		if found {

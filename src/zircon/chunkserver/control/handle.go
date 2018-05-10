@@ -225,7 +225,7 @@ func (cs *chunkserver) StartWrite(chunk apis.ChunkNum, offset uint32, data []byt
 
 	_, err := cs.Storage.GetLatestVersion(chunk)
 	if err != nil {
-		return err
+		return fmt.Errorf("[handle.go/GLV] %v", err)
 	}
 
 	if int(offset)+len(data) > int(apis.MaxChunkSize) {

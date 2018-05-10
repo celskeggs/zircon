@@ -5,6 +5,7 @@ import (
 	"zircon/apis"
 	"zircon/rpc"
 	"zircon/util"
+	"fmt"
 )
 
 type wrapper struct {
@@ -50,16 +51,16 @@ func (w *wrapper) UpdateLatestVersion(chunk apis.ChunkNum, oldVersion apis.Versi
 
 func (w *wrapper) StartWriteReplicated(chunk apis.ChunkNum, offset uint32, data []byte, replicas []apis.ServerAddress) error {
 	if err := w.Single.StartWrite(chunk, offset, data); err != nil {
-		return err
+		return fmt.Errorf("[chatter.go/WSW] %v", err)
 	}
 	for _, replica := range replicas {
 		server, err := w.Cache.SubscribeChunkserver(replica)
 		if err != nil {
-			return err
+			return fmt.Errorf("[chatter.go/CSC] %v", err)
 		}
 		err = server.StartWrite(chunk, offset, data)
 		if err != nil {
-			return err
+			return fmt.Errorf("[chatter.go/SSW] %v", err)
 		}
 	}
 	return nil

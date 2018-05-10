@@ -86,7 +86,7 @@ func TestSimpleClientReadWrite(t *testing.T) {
 	assert.Error(t, err)
 
 	ver, err := client.Write(cn, 0, apis.AnyVersion, []byte("hello, world!"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, ver > 0)
 
 	data, ver2, err := client.Read(cn, 0, apis.MaxChunkSize)

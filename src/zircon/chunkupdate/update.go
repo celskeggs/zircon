@@ -87,9 +87,13 @@ func (ref *Reference) PrepareWrite(cache rpc.ConnectionCache, offset uint32, dat
 	}
 	initial, err := cache.SubscribeChunkserver(addresses[0])
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("[update.go/CSC] %v", err)
 	}
-	return apis.CalculateCommitHash(offset, data), initial.StartWriteReplicated(ref.Chunk, offset, data, addresses[1:])
+	err = initial.StartWriteReplicated(ref.Chunk, offset, data, addresses[1:])
+	if err != nil {
+		return "", fmt.Errorf("[update.go/SWR] %v", err)
+	}
+	return apis.CalculateCommitHash(offset, data), err
 }
 
 type UpdaterMetadata interface {
@@ -140,12 +144,12 @@ func (f *updater) New(replicaNum int) (apis.ChunkNum, error) {
 	// TODO: try to load-balance when initially selecting chunkservers
 	replicas, err := f.selectInitialChunkservers(replicaNum)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("[update.go/SIC] %v", err)
 	}
 	// TODO: garbage collection should look for Version=0 metadata entries and delete them
 	chunk, err := f.metadata.NewEntry()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("[update.go/NET] %v", err)
 	}
 	err = f.metadata.UpdateEntry(chunk, apis.MetadataEntry{}, apis.MetadataEntry{
 		MostRecentVersion:   0,

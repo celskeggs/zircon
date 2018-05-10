@@ -4,6 +4,7 @@ import (
 	"zircon/apis"
 	"zircon/rpc"
 	"zircon/chunkupdate"
+	"fmt"
 )
 
 const InitialReplicationFactor = 2
@@ -31,7 +32,10 @@ func ConstructAccess(etcd apis.EtcdInterface, cache rpc.ConnectionCache) (*Acces
 // If this chunk isn't written to before the connection to the server closes, the empty chunk may be deleted. (?)
 func (f *Access) New() (apis.MetadataID, error) {
 	num, err := f.updater.New(InitialReplicationFactor)
-	return apis.MetadataID(num), err
+	if err != nil {
+		return 0, fmt.Errorf("while constructing new metadata chunk: %v", err)
+	}
+	return apis.MetadataID(num), nil
 }
 
 // Reads a complete metadata chunk.
@@ -47,11 +51,11 @@ func (f *Access) Read(chunk apis.MetadataID) ([]byte, apis.Version, error) {
 func (f *Access) Write(chunk apis.MetadataID, version apis.Version, offset uint32, data []byte) (apis.Version, error) {
 	ref, err := f.updater.ReadMeta(apis.ChunkNum(chunk))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("[access.go/URM] %v", err)
 	}
 	hash, err := ref.PrepareWrite(f.cache, offset, data)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("[access.go/RPW] %v", err)
 	}
 	return f.updater.CommitWrite(apis.ChunkNum(chunk), ref.Version, hash)
 }
