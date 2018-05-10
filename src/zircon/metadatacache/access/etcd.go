@@ -2,11 +2,9 @@ package access
 
 import (
 	"zircon/apis"
-	"zircon/rpc"
 	"zircon/chunkupdate"
+	"errors"
 	"fmt"
-	"sync"
-	"github.com/pkg/errors"
 )
 
 type etcdMetadataUpdater struct {
@@ -17,15 +15,22 @@ var _ chunkupdate.UpdaterMetadata = &etcdMetadataUpdater{}
 
 func (r *etcdMetadataUpdater) NewEntry() (apis.ChunkNum, error) {
 	for i := apis.MinMetadataRange; i <= apis.MaxMetadataRange; i++ {
+		owner, err := r.etcd.TryClaimingMetadata(i)
+		if err != nil {
+			return 0, fmt.Errorf("while scanning claims for NewEntry: %v", err)
+		}
+		if owner != r.etcd.GetName() {
+			continue // someone else has this, of course
+		}
 		data, err := r.etcd.GetMetametadata(i)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("while scanning metametadata for NewEntry: %v", err)
 		}
 		if len(data.Replicas) == 0 && data.LastConsumedVersion == 0 && data.MostRecentVersion == 0 {
 			return apis.ChunkNum(i), nil
 		}
 	}
-	return 0, errors.New("no metadata blocks left to allocate!")
+	return 0, errors.New("no metadata blocks left to allocate")
 }
 
 func (r *etcdMetadataUpdater) ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, error) {

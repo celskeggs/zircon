@@ -31,10 +31,11 @@ protoc --twirp_out=. --go_out=. ./zircon/rpc/twirp/*.proto
 
 # generate mockery mocks
 
-for interface in Chunkserver Frontend MetadataCache
+for interface in Chunkserver Frontend MetadataCache EtcdInterface
 do
 	mockery -dir zircon/apis/ "-name=${interface}" -output zircon/apis/mocks/
 done
+mockery -dir zircon/chunkupdate/ "-name=UpdaterMetadata" -output zircon/chunkupdate/mocks/
 
 # build binary
 

@@ -192,6 +192,38 @@ func TestMetadataLeases(t *testing.T) {
 	attemptClaimsDual(iface1, 7, iface1)
 }
 
+func TestLeaseAnyMetametadata(t *testing.T) {
+	iface1, iface2, teardown := PrepareTwoClients(t)
+	defer teardown()
+
+	assert.NoError(t, iface1.BeginMetadataLease())
+	assert.NoError(t, iface2.BeginMetadataLease())
+
+	owner, err := iface1.TryClaimingMetadata(1)
+	assert.NoError(t, err)
+	assert.Equal(t, iface1.GetName(), owner)
+	assert.NoError(t, iface1.UpdateMetametadata(1, apis.MetadataEntry{}, apis.MetadataEntry{MostRecentVersion: 1}))
+
+	owner, err = iface2.TryClaimingMetadata(4)
+	assert.NoError(t, err)
+	assert.Equal(t, iface2.GetName(), owner)
+	assert.NoError(t, iface2.UpdateMetametadata(4, apis.MetadataEntry{}, apis.MetadataEntry{MostRecentVersion: 4}))
+
+	owner, err = iface2.TryClaimingMetadata(3)
+	assert.NoError(t, err)
+	assert.Equal(t, iface2.GetName(), owner)
+	assert.NoError(t, iface2.UpdateMetametadata(3, apis.MetadataEntry{}, apis.MetadataEntry{MostRecentVersion: 3}))
+	assert.NoError(t, iface2.DisclaimMetadata(3))
+
+	metadata, err := iface1.LeaseAnyMetametadata()
+	assert.NoError(t, err)
+	assert.Equal(t, apis.MetadataID(3), metadata)
+
+	metadata, err = iface1.LeaseAnyMetametadata()
+	assert.NoError(t, err)
+	assert.Equal(t, apis.MetadataID(0), metadata)
+}
+
 func TestReadWriteMetadata(t *testing.T) {
 	iface1, iface2, teardown := PrepareTwoClients(t)
 	defer teardown()
@@ -206,14 +238,14 @@ func TestReadWriteMetadata(t *testing.T) {
 	_, err := iface1.GetMetametadata(3)
 	assert.Error(t, err)
 
-	sampleMetametadata := apis.Metametadata{
-		MetaID:    3,
-		Version:   61,
-		Locations: []apis.ServerName{"topaz-5", "quartz-43", "ruby-1524"},
+	sampleMetametadata := apis.MetadataEntry{
+		LastConsumedVersion: 61,
+		MostRecentVersion:   62,
+		Replicas:            []apis.ServerID{5, 43, 1524},
 	}
 
 	// fails because no claim
-	assert.Error(t, iface1.UpdateMetametadata(3, sampleMetametadata))
+	assert.Error(t, iface1.UpdateMetametadata(3, apis.MetadataEntry{}, sampleMetametadata))
 
 	owner, err := iface1.TryClaimingMetadata(3)
 	assert.NoError(t, err)
@@ -221,11 +253,11 @@ func TestReadWriteMetadata(t *testing.T) {
 
 	data, err := iface1.GetMetametadata(3)
 	assert.NoError(t, err)
-	assert.Equal(t, apis.MetadataID(3), data.MetaID)
-	assert.Equal(t, apis.Version(0), data.Version)
-	assert.Empty(t, data.Locations)
+	assert.Equal(t, apis.Version(0), data.LastConsumedVersion)
+	assert.Equal(t, apis.Version(0), data.MostRecentVersion)
+	assert.Empty(t, data.Replicas)
 
-	assert.NoError(t, iface1.UpdateMetametadata(3, sampleMetametadata))
+	assert.NoError(t, iface1.UpdateMetametadata(3, apis.MetadataEntry{}, sampleMetametadata))
 	data, err = iface1.GetMetametadata(3)
 	assert.NoError(t, err)
 	assert.Equal(t, sampleMetametadata, data)

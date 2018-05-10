@@ -4,6 +4,8 @@ import (
 	"errors"
 	"zircon/apis"
 	"zircon/rpc"
+	"zircon/chunkupdate"
+	"fmt"
 )
 
 type client struct {
@@ -25,14 +27,23 @@ func ConstructClient(frontend apis.Frontend, conncache rpc.ConnectionCache) (api
 // The chunk is not considered to exist until that first write is performed.
 // If this chunk isn't written to before the connection to the server closes, the empty chunk will be deleted.
 func (c *client) New() (apis.ChunkNum, error) {
-	return 0, errors.New("unimplemented")
+	return c.fe.New()
 }
 
 // Read part or all of the contents of a chunk. offset + length cannot exceed MaxChunkSize.
 // Returns the data read and the version of the data read. The version can be used with Write.
 // If the chunk does not exist, returns an error.
 func (c *client) Read(ref apis.ChunkNum, offset uint32, length uint32) ([]byte, apis.Version, error) {
-	return nil, 0, errors.New("unimplemented")
+	version, addresses, err := c.fe.ReadMetadataEntry(ref)
+	if err != nil {
+		return nil, 0, err
+	}
+	reference := &chunkupdate.Reference{
+		Chunk:    ref,
+		Version:  version,
+		Replicas: addresses,
+	}
+	return reference.PerformRead(c.cache, offset, length)
 }
 
 // Write part or all of the contents of a chunk. offset + len(data) cannot exceed MaxChunkSize.
@@ -43,16 +54,40 @@ func (c *client) Read(ref apis.ChunkNum, offset uint32, length uint32) ([]byte, 
 // If the chunk does not exist, returns an error. If this fails for any reason, there must be no visible change to
 // the underlying data. If this fails for a reason besides staleness, the version must be zero.
 func (c *client) Write(ref apis.ChunkNum, offset uint32, version apis.Version, data []byte) (apis.Version, error) {
-	return 0, errors.New("unimplemented")
+	rversion, addresses, err := c.fe.ReadMetadataEntry(ref)
+	if err != nil {
+		return 0, fmt.Errorf("[client.go/RME] %v", err)
+	}
+	if len(addresses) == 0 {
+		return 0, fmt.Errorf("given zero replicas when reading metadata entry")
+	}
+	if rversion != version {
+		return rversion, errors.New("version mismatch")
+	}
+	reference := &chunkupdate.Reference{
+		Chunk:    ref,
+		Version:  rversion,
+		Replicas: addresses,
+	}
+	hash, err := reference.PrepareWrite(c.cache, offset, data)
+	if err != nil {
+		return 0, fmt.Errorf("[client.go/RPW] %v", err)
+	}
+	ver, err := c.fe.CommitWrite(ref, version, hash)
+	if err != nil {
+		return ver, fmt.Errorf("[client.go/FCW] %v", err)
+	}
+	return ver, nil
 }
 
 // Destroy a chunk, given a specific version number. Version checking works the same as for Write.
 // If the chunk does not exist, returns an error.
 func (c *client) Delete(ref apis.ChunkNum, version apis.Version) error {
-	return errors.New("unimplemented")
+	return c.fe.Delete(ref, version)
 }
 
 // Close all connections used by this client.
 func (c *client) Close() error {
-	return errors.New("unimplemented")
+	// nothing to do here... just when wrapped
+	return nil
 }

@@ -295,8 +295,52 @@ func (e *etcdinterface) TryClaimingMetadata(blockid apis.MetadataID) (apis.Serve
 }
 
 // Try claiming some block of metametadata that is available and report how many remaining blocks are available to be leased
-func (e *etcdinterface) LeaseOrCreateAnyMetametadata() (apis.MetadataID, error) {
-	return 0, errors.New("unimplemented") // TODO: implement
+func (e *etcdinterface) LeaseAnyMetametadata() (apis.MetadataID, error) {
+	start := "/metadata/"
+	end := "/metadata0" // because '0' is the character directly after '/'
+	resp, err := e.Client.Get(context.Background(), start, clientv3.WithRange(end), clientv3.WithKeysOnly())
+	if err != nil {
+		return 0, err
+	}
+	// scan through to find all blocks
+	all := map[apis.MetadataID]bool{}
+	for _, kv := range resp.Kvs {
+		if strings.HasPrefix(string(kv.Key), "/metadata/data/") {
+			metaID, err := strconv.ParseUint(string(kv.Key[len("/metadata/data/"):]), 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			all[apis.MetadataID(metaID)] = true
+		}
+	}
+	// scan through to eliminate everything already claimed
+	for _, kv := range resp.Kvs {
+		if strings.HasPrefix(string(kv.Key), "/metadata/claims/") {
+			metaID, err := strconv.ParseUint(string(kv.Key[len("/metadata/claims/"):]), 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			all[apis.MetadataID(metaID)] = false
+		}
+	}
+
+	for k, v := range all {
+		if v {
+			owner, err := e.TryClaimingMetadata(k)
+			if err != nil {
+				return 0, err
+			}
+			// did we grab it?
+			if owner == e.GetName() {
+				// yup!
+				return k, nil
+			}
+			// continue and try the next option
+		}
+	}
+
+	// nothing left to claim
+	return 0, nil
 }
 
 // Assuming that this server owns a particular block of metadata, release that metadata back out into the wild.
@@ -316,7 +360,7 @@ func (e *etcdinterface) DisclaimMetadata(blockid apis.MetadataID) error {
 	return nil
 }
 
-func (e *etcdinterface) GetMetametadata(blockid apis.MetadataID) (apis.MetadataEntry, error) {
+func (e *etcdinterface) getMetametadataRaw(blockid apis.MetadataID) ([]byte, apis.MetadataEntry, error) {
 	checkKey := fmt.Sprintf("/metadata/claims/%d", blockid)
 	readKey := fmt.Sprintf("/metadata/data/%d", blockid)
 
@@ -325,16 +369,16 @@ func (e *etcdinterface) GetMetametadata(blockid apis.MetadataID) (apis.MetadataE
 		Then(clientv3.OpGet(readKey)).
 		Commit()
 	if err != nil {
-		return apis.MetadataEntry{}, err
+		return nil, apis.MetadataEntry{}, err
 	}
 	if !txn.Succeeded {
-		return apis.MetadataEntry{}, errors.New("cannot get metadata; claim currently held!")
+		return nil, apis.MetadataEntry{}, errors.New("cannot get metadata; claim not held by us")
 	}
 
 	kvs := txn.Responses[0].GetResponseRange().Kvs
 	if len(kvs) == 0 {
 		// just return an empty block by default
-		return apis.MetadataEntry{
+		return nil, apis.MetadataEntry{
 			Replicas: nil,
 		}, nil
 	} else {
@@ -342,30 +386,60 @@ func (e *etcdinterface) GetMetametadata(blockid apis.MetadataID) (apis.MetadataE
 		mmd := apis.MetadataEntry{}
 		err := json.Unmarshal(kvs[0].Value, &mmd)
 		if err != nil {
-			return apis.MetadataEntry{}, err
+			return nil, apis.MetadataEntry{}, err
 		}
-		return mmd, nil
+		return kvs[0].Value, mmd, nil
 	}
 }
 
-func (e *etcdinterface) UpdateMetametadata(blockid apis.MetadataID, data apis.Metametadata) error {
+func (e *etcdinterface) GetMetametadata(blockid apis.MetadataID) (apis.MetadataEntry, error) {
+	_, entry, err := e.getMetametadataRaw(blockid)
+	return entry, err
+}
+
+func (e *etcdinterface) UpdateMetametadata(blockid apis.MetadataID, previous apis.MetadataEntry, data apis.MetadataEntry) error {
+	checkKey := fmt.Sprintf("/metadata/claims/%d", blockid)
+	readKey := fmt.Sprintf("/metadata/data/%d", blockid)
+
+	originalBytes, originalEntry, err := e.getMetametadataRaw(blockid)
+	if err != nil {
+		return err
+	}
+
+	if !originalEntry.Equals(previous) {
+		return errors.New("cannot update metadata; mismatch on previous value")
+	}
+
 	menc, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
 
-	checkKey := fmt.Sprintf("/metadata/claims/%d", blockid)
-	readKey := fmt.Sprintf("/metadata/data/%d", blockid)
+	var checkPrevious clientv3.Cmp
+	if originalBytes == nil {
+		checkPrevious = clientv3.Compare(clientv3.CreateRevision(readKey), "=", 0)
+	} else {
+		checkPrevious = clientv3.Compare(clientv3.Value(readKey), "=", string(originalBytes))
+	}
 
 	txn, err := e.Client.Txn(context.Background()).
-		If(clientv3.Compare(clientv3.Value(checkKey), "=", string(e.LocalName))).
+		If(clientv3.Compare(clientv3.Value(checkKey), "=", string(e.LocalName)),
+			checkPrevious).
 		Then(clientv3.OpPut(readKey, string(menc))).
+		Else(clientv3.OpGet(checkKey)).
 		Commit()
 	if err != nil {
 		return err
 	}
 	if !txn.Succeeded {
-		return errors.New("cannot update metadata; claim currently held!")
+		kvs := txn.Responses[0].GetResponseRange().Kvs
+		if len(kvs) == 0 {
+			return errors.New("cannot update metadata; claim not held")
+		}
+		if string(kvs[0].Value) != string(e.LocalName) {
+			return errors.New("cannot update metadata; claim held by someone else")
+		}
+		return errors.New("cannot update metadata; data-level mismatch")
 	}
 	return nil
 }

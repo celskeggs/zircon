@@ -47,7 +47,7 @@ const MaxRedirections = 30
 func (r *reselectingMetadataUpdater) runRedirectionLoop(attempt func(apis.MetadataCache) (apis.ServerName, error)) error {
 	cache, err := r.getMetadataCache()
 	if err != nil {
-		return err
+		return fmt.Errorf("[metadata.go/GMC] %v", err)
 	}
 	var lastSkippedError error
 	for tries := 0; tries < MaxRedirections; tries++ {
@@ -60,7 +60,7 @@ func (r *reselectingMetadataUpdater) runRedirectionLoop(attempt func(apis.Metada
 			lastSkippedError = err
 			cache, err = r.getSpecificMetadataCache(redirect)
 			if err != nil {
-				return err
+				return fmt.Errorf("[metadata.go/SMC] %v", err)
 			}
 			// fall through; let's try this again with the correct server.
 		}
@@ -73,9 +73,13 @@ func (r *reselectingMetadataUpdater) runRedirectionLoop(attempt func(apis.Metada
 func (r *reselectingMetadataUpdater) NewEntry() (apis.ChunkNum, error) {
 	cache, err := r.getMetadataCache()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("[metadata.go:GMC] %v", err)
 	}
-	return cache.NewEntry()
+	chunk, err := cache.NewEntry()
+	if err != nil {
+		return 0, fmt.Errorf("[metadata.go:CNE] %v", err)
+	}
+	return chunk, nil
 }
 
 func (r *reselectingMetadataUpdater) ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, error) {
@@ -84,6 +88,9 @@ func (r *reselectingMetadataUpdater) ReadEntry(chunk apis.ChunkNum) (apis.Metada
 		entry, redirect, err = cache.ReadEntry(chunk)
 		return
 	})
+	if err == nil && len(entry.Replicas) == 0 {
+		return apis.MetadataEntry{}, fmt.Errorf("found zero-length replica list while reading from metadata cache")
+	}
 	return entry, err
 }
 

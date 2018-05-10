@@ -5,7 +5,7 @@ import (
 	"zircon/apis"
 	"zircon/rpc"
 	"sync"
-	"github.com/pkg/errors"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -130,11 +130,11 @@ func (l *Leasing) GetOrCreateAnyUnleased() (apis.MetadataID, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !l.safe {
-		return 0, errors.New("lease has expired! cannot safely perform any operations.")
+		return 0, errors.New("lease has expired! cannot safely perform any operations")
 	}
 	id, err := l.etcd.LeaseAnyMetametadata()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("[leasing.go/LAM] %v", err)
 	}
 	var ver apis.Version
 	var data []byte
@@ -142,18 +142,18 @@ func (l *Leasing) GetOrCreateAnyUnleased() (apis.MetadataID, error) {
 		// TODO: what if we lose our lease right here?
 		id, err = l.access.New()
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("[leasing.go/ACN] %v", err)
 		}
 		// we do an empty write to make sure the block sticks around (TODO: is this necessary?)
 		ver, err = l.access.Write(id, apis.AnyVersion, 0, []byte{})
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("[leasing.go/ACW] %v", err)
 		}
 		data = make([]byte, apis.MaxChunkSize)
 	} else {
 		data, ver, err = l.access.Read(id)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("[leasing.go/ACR] %v", err)
 		}
 	}
 	l.leases[id] = &Lease{
@@ -162,7 +162,7 @@ func (l *Leasing) GetOrCreateAnyUnleased() (apis.MetadataID, error) {
 	}
 	if err := l.ensureRenewed_LK(); err != nil {
 		// cache invalidated!
-		return 0, err
+		return 0, fmt.Errorf("[leasing.go/ERL] %v", err)
 	}
 	return id, nil
 }
@@ -235,7 +235,7 @@ func (l *Leasing) Read(metachunk apis.MetadataID) ([]byte, apis.Version, apis.Se
 // iff the problem was something else.
 func (l *Leasing) Write(metachunk apis.MetadataID, version apis.Version, offset uint32, data []byte) (apis.Version, apis.ServerName, error) {
 	if offset + uint32(len(data)) > apis.MaxChunkSize {
-		return 0, apis.NoRedirect, errors.New("write is too large!")
+		return 0, apis.NoRedirect, errors.New("write is too large")
 	}
 	if version == 0 {
 		return 0, apis.NoRedirect, errors.New("version cannot be zero to Leasing.Write")

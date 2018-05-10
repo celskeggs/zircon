@@ -103,10 +103,6 @@ func (cs *chunkserver) Add(chunk apis.ChunkNum, initialData []byte, initialVersi
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	if initialVersion <= 0 {
-		return fmt.Errorf("initial version was not positive: %d/%d", chunk, initialVersion)
-	}
-
 	versions, err := cs.Storage.ListVersions(chunk)
 	if err != nil {
 		return err
@@ -225,7 +221,7 @@ func (cs *chunkserver) StartWrite(chunk apis.ChunkNum, offset uint32, data []byt
 
 	_, err := cs.Storage.GetLatestVersion(chunk)
 	if err != nil {
-		return err
+		return fmt.Errorf("[handle.go/GLV] %v", err)
 	}
 
 	if int(offset)+len(data) > int(apis.MaxChunkSize) {

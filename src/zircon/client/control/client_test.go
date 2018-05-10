@@ -14,35 +14,52 @@ import (
 	"zircon/frontend"
 	"zircon/rpc"
 	"zircon/util"
+	"zircon/metadatacache"
 )
 
 // Prepares three chunkservers (cs0-cs2) and one frontend server (fe0)
 func PrepareLocalCluster(t *testing.T) (rpccache rpc.ConnectionCache, stats chunkserver.StorageStats, fe apis.Frontend, teardown func()) {
 	cache := &rpc.MockCache{
 		Frontends: map[apis.ServerAddress]apis.Frontend{},
+		Chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
 	}
-	cs0, stats1, teardown1 := chunkserver.NewTestChunkserver(t, cache)
-	cs1, stats2, teardown2 := chunkserver.NewTestChunkserver(t, cache)
-	cs2, stats3, teardown3 := chunkserver.NewTestChunkserver(t, cache)
-	cache.Chunkservers = map[apis.ServerAddress]apis.Chunkserver{
-		"cs0": cs0,
-		"cs1": cs1,
-		"cs2": cs2,
+	etcds, teardown1 := etcd.PrepareSubscribeForTesting(t)
+	var teardowns util.MultiTeardown
+	teardowns.Add(teardown1)
+	var allStats []chunkserver.StorageStats
+	for i := 0; i < 3; i++ {
+		name := apis.ServerName(fmt.Sprintf("cs%d", i))
+		address := apis.ServerAddress(fmt.Sprintf("cs-address-%d", i))
+
+		cs, csStats, csTeardown := chunkserver.NewTestChunkserver(t, cache)
+		teardowns.Add(csTeardown)
+		allStats = append(allStats, csStats)
+		cache.Chunkservers[address] = cs
+
+		etcd0, etcdClientTeardown := etcds(name)
+		assert.NoError(t, etcd0.UpdateAddress(address, apis.CHUNKSERVER))
+		teardowns.Add(etcdClientTeardown)
 	}
-	etcds, teardown4 := etcd.PrepareSubscribeForTesting(t)
-	etcd0, teardown5 := etcds("fe0")
-	fe, err := frontend.ConstructFrontendOnNetwork(etcd0, cache)
+
+	etcd0, teardown2 := etcds("fe0")
+	teardowns.Add(teardown2)
+	fe, err := frontend.ConstructFrontend(etcd0, cache)
 	assert.NoError(t, err)
+	mdc0, err := metadatacache.NewCache(cache, etcd0)
+	assert.NoError(t, err)
+	cache.MetadataCaches = map[apis.ServerAddress]apis.MetadataCache{
+		"mdc-address-0": mdc0,
+	}
+	assert.NoError(t, etcd0.UpdateAddress("mdc-address-0", apis.METADATACACHE))
+
 	return cache, func() int {
 			// TODO: include partial metadata usage in these stats?
-			return stats1() + stats2() + stats3()
-		}, fe, func() {
-			teardown5()
-			teardown4()
-			teardown3()
-			teardown2()
-			teardown1()
-		}
+			sum := 0
+			for _, statf := range allStats {
+				sum += statf()
+			}
+			return sum
+		}, fe, teardowns.Teardown
 }
 
 func PrepareSimpleClient(t *testing.T) (apis.Client, func()) {
@@ -63,13 +80,15 @@ func TestSimpleClientReadWrite(t *testing.T) {
 	defer teardown()
 
 	cn, err := client.New()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	_, _, err = client.Read(cn, 0, 1)
-	assert.Error(t, err)
-
-	ver, err := client.Write(cn, 0, apis.AnyVersion, []byte("hello, world!"))
+	data, ver, err := client.Read(cn, 0, 1)
 	assert.NoError(t, err)
+	assert.Equal(t, apis.Version(0), ver)
+	assert.Equal(t, []byte{0}, data)
+
+	ver, err = client.Write(cn, 0, apis.AnyVersion, []byte("hello, world!"))
+	require.NoError(t, err)
 	assert.True(t, ver > 0)
 
 	data, ver2, err := client.Read(cn, 0, apis.MaxChunkSize)
@@ -115,11 +134,13 @@ func TestMaxSizeChecking(t *testing.T) {
 	data[len(data)-1] = 'a'
 	ver, err := client.Write(cn, 2, apis.AnyVersion, data)
 	assert.Error(t, err)
-	assert.Equal(t, 0, ver)
+	assert.Equal(t, apis.Version(0), ver)
 
 	// make sure that the failed write didn't actually succeed
-	_, _, err = client.Read(cn, 2, 5)
-	assert.Error(t, err)
+	rdata, ver, err := client.Read(cn, 2, 5)
+	assert.NoError(t, err)
+	assert.Equal(t, apis.Version(0), ver)
+	assert.Equal(t, []byte{0,0,0,0,0}, rdata)
 
 	ver, err = client.Write(cn, 1, apis.AnyVersion, data)
 	assert.NoError(t, err)
@@ -127,7 +148,7 @@ func TestMaxSizeChecking(t *testing.T) {
 
 	// confirm write succeeded this time
 	rdata, ver2, err := client.Read(cn, 0, apis.MaxChunkSize)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, ver, ver2)
 	assert.Equal(t, apis.MaxChunkSize, len(rdata))
 	assert.Equal(t, byte('a'), rdata[apis.MaxChunkSize-1])
@@ -161,7 +182,7 @@ func TestConflictingClients(t *testing.T) {
 	})
 	count := 10
 
-	finishAt := time.Now().Add(time.Second)
+	finishAt := time.Now().Add(time.Second * 5)
 	for i := 0; i < count; i++ {
 		go func(clientId int) {
 			subtotal := 0
@@ -198,10 +219,11 @@ func TestConflictingClients(t *testing.T) {
 					newData := make([]byte, 128)
 					copy(newData, []byte(strconv.Itoa(newValue)))
 					newver, err := client.Write(chunk, 0, ver, newData)
-					assert.True(t, newver > ver)
 					if err == nil {
+						assert.True(t, newver > ver)
 						break
 					}
+					assert.True(t, newver >= ver || newver == 0)
 				}
 
 				subcount++
@@ -215,13 +237,13 @@ func TestConflictingClients(t *testing.T) {
 	finalCount := 0
 	for i := 0; i < count; i++ {
 		subtotal := <-complete
-		// should be able to process at least one contended request per millisecond on average
-		assert.True(t, subtotal.count >= 50, "not enough requests processed: %d/50", subtotal.count)
+		assert.True(t, subtotal.count >= 1, "not enough requests processed: %d/50", subtotal.count)
 		assert.NotEqual(t, 0, subtotal.subtotal)
 		finalCount += subtotal.count
 		finalSum += subtotal.subtotal
 	}
-	assert.True(t, finalCount >= 1000, "not enough requests processed: %d/1000", finalCount)
+	// should be able to process at least four contended requests per second on average
+	assert.True(t, finalCount >= 20, "not enough requests processed: %d/1000", finalCount)
 
 	checkSum := func() int {
 		teardownClient, err := ConstructClient(fe, cache)
@@ -234,7 +256,7 @@ func TestConflictingClients(t *testing.T) {
 		return result
 	}
 
-	assert.Equal(t, finalSum, checkSum)
+	assert.Equal(t, finalSum, checkSum())
 }
 
 // Tests the ability of many parallel clients to independently perform lots of operations on their own blocks.
@@ -243,9 +265,9 @@ func TestParallelClients(t *testing.T) {
 	defer teardown()
 
 	complete := make(chan int)
-	count := 10
+	count := 8
 
-	finishAt := time.Now().Add(time.Second)
+	finishAt := time.Now().Add(time.Second * 5)
 	for i := 0; i < count; i++ {
 		go func(clientId int) {
 			operations := 0
@@ -306,10 +328,10 @@ func TestParallelClients(t *testing.T) {
 	ops := 0
 	for i := 0; i < count; i++ {
 		opsSingle := <-complete
-		assert.True(t, opsSingle >= 50, "not enough requests processed: %d/50", opsSingle)
+		assert.True(t, opsSingle >= 3, "not enough requests processed: %d/3", opsSingle)
 		ops += opsSingle
 	}
-	assert.True(t, ops >= 1000, "not enough requests processed: %d/1000", ops)
+	assert.True(t, ops >= 40, "not enough requests processed: %d/40", ops)
 }
 
 // Tests the ability for deleted chunks to be fully cleaned up
