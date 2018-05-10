@@ -8,6 +8,7 @@ import (
 	"zircon/rpc"
 	"zircon/metadatacache/leasing"
 	"fmt"
+	"zircon/util"
 )
 
 type metadatacache struct {
@@ -134,6 +135,11 @@ func (mc *metadatacache) DeleteEntry(chunk apis.ChunkNum, previous apis.Metadata
 
 // Deserialize a metadate entry using gob
 func deserializeEntry(data []byte) (apis.MetadataEntry, error) {
+	if len(util.StripTrailingZeroes(data)) == 0 {
+		// no data to deserialize; represents empty metadata entry
+		return apis.MetadataEntry{}, nil
+	}
+
 	dec := gob.NewDecoder(bytes.NewReader(data))
 	var entry apis.MetadataEntry
 	err := dec.Decode(&entry)
