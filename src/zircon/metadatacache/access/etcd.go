@@ -15,6 +15,13 @@ var _ chunkupdate.UpdaterMetadata = &etcdMetadataUpdater{}
 
 func (r *etcdMetadataUpdater) NewEntry() (apis.ChunkNum, error) {
 	for i := apis.MinMetadataRange; i <= apis.MaxMetadataRange; i++ {
+		owner, err := r.etcd.TryClaimingMetadata(i)
+		if err != nil {
+			return 0, fmt.Errorf("while scanning claims for NewEntry: %v", err)
+		}
+		if owner != r.etcd.GetName() {
+			continue // someone else has this, of course
+		}
 		data, err := r.etcd.GetMetametadata(i)
 		if err != nil {
 			return 0, fmt.Errorf("while scanning metametadata for NewEntry: %v", err)
