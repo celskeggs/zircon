@@ -180,9 +180,6 @@ func (f *updater) New(replicaNum int) (apis.ChunkNum, error) {
 }
 
 func (f *updater) getReplicaAddresses(entry apis.MetadataEntry) ([]apis.ServerAddress, error) {
-	if len(entry.Replicas) == 0 {
-		return nil, fmt.Errorf("no replica addresses provided to getReplicaAddresses")
-	}
 	addresses := make([]apis.ServerAddress, len(entry.Replicas))
 	for i, id := range entry.Replicas {
 		address, err := AddressForChunkserver(f.etcd, id)
@@ -230,9 +227,6 @@ func (f *updater) ReadMeta(chunk apis.ChunkNum) (*Reference, error) {
 	addresses, err := f.getReplicaAddresses(entry)
 	if err != nil {
 		return nil, fmt.Errorf("failure while getting metadata addresses: %v", err)
-	}
-	if len(addresses) == 0 {
-		return nil, fmt.Errorf("received zero-length address list for entry")
 	}
 	return &Reference{
 		Chunk: chunk,

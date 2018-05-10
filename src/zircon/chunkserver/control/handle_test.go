@@ -78,14 +78,6 @@ func TestChunkserverSingle(t *testing.T) {
 		assert.Error(cs.Delete(1, 1))
 	})
 
-	test("can't create new entry with version=0", func() {
-		assert.Error(cs.Add(7, []byte("hello world"), 0))
-
-		chunks, err := cs.ListAllChunks()
-		assert.NoError(err)
-		assert.Empty(chunks)
-	})
-
 	test("create new entry", func() {
 		assert.NoError(cs.Add(7, []byte("hello world"), 3))
 

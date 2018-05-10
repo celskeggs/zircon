@@ -407,7 +407,9 @@ func TestReadMeta_CurrentlyDeleting(t *testing.T) {
 //     success: yes, no
 
 func GenericTestNew(t *testing.T, replicas int, chunkservers int) {
-	cache := &rpc.MockCache{}
+	cache := &rpc.MockCache{
+		Chunkservers: map[apis.ServerAddress]apis.Chunkserver{},
+	}
 
 	etcdMock := &mocks.EtcdInterface{}
 	metadataMock := &mocks2.UpdaterMetadata{}
@@ -424,12 +426,21 @@ func GenericTestNew(t *testing.T, replicas int, chunkservers int) {
 	for csI := 0; csI < chunkservers; csI++ {
 		replicaID := apis.ServerID(rand.Uint32())
 		name := apis.ServerName(fmt.Sprintf("chunkserver-%d", csI))
+		address := apis.ServerAddress(fmt.Sprintf("address-%d", rand.Uint64()))
 
 		chunkIDs = append(chunkIDs, replicaID)
 		chunkNames = append(chunkNames, name)
 
+		chunkMock := &mocks.Chunkserver{}
+		cache.Chunkservers[address] = chunkMock
+
 		if replicas != 0 {
 			etcdMock.On("GetIDByName", name).Return(replicaID, nil)
+			if expectSuccess {
+				etcdMock.On("GetNameByID", replicaID).Return(name, nil)
+				etcdMock.On("GetAddress", name, apis.CHUNKSERVER).Return(address, nil)
+				chunkMock.On("Add", chunk, []byte{}, apis.Version(0)).Return(nil)
+			}
 		}
 	}
 
@@ -474,7 +485,13 @@ func GenericTestNew(t *testing.T, replicas int, chunkservers int) {
 		assert.Error(t, err)
 	}
 
-	etcdMock.AssertExpectations(t)
+	// can't check chunk mocks, because only a subset will be triggered!
+	if replicas != 0 {
+		etcdMock.AssertCalled(t, "ListServers", apis.CHUNKSERVER)
+		for _, name := range chunkNames {
+			etcdMock.AssertCalled(t, "GetIDByName", name)
+		}
+	}
 	metadataMock.AssertExpectations(t)
 }
 
