@@ -3,6 +3,7 @@ package apis
 import (
 	"crypto/sha256"
 	"fmt"
+	"encoding/hex"
 )
 
 // A hash of a write at a particular offset with a particular length and data.
@@ -31,5 +32,5 @@ type Frontend interface {
 func CalculateCommitHash(offset uint32, data []byte) CommitHash {
 	hashInput := fmt.Sprintf("%d %d %s", offset, len(data), string(data))
 	hashArray := sha256.Sum256([]byte(hashInput))
-	return CommitHash(hashArray[:])
+	return CommitHash(hex.EncodeToString(hashArray[:]))
 }

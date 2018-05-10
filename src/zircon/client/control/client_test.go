@@ -237,13 +237,13 @@ func TestConflictingClients(t *testing.T) {
 	finalCount := 0
 	for i := 0; i < count; i++ {
 		subtotal := <-complete
-		assert.True(t, subtotal.count >= 1, "not enough requests processed: %d/50", subtotal.count)
+		assert.True(t, subtotal.count >= 1, "not enough requests processed: %d/1", subtotal.count)
 		assert.NotEqual(t, 0, subtotal.subtotal)
 		finalCount += subtotal.count
 		finalSum += subtotal.subtotal
 	}
 	// should be able to process at least four contended requests per second on average
-	assert.True(t, finalCount >= 20, "not enough requests processed: %d/1000", finalCount)
+	assert.True(t, finalCount >= 20, "not enough requests processed: %d/20", finalCount)
 
 	checkSum := func() int {
 		teardownClient, err := ConstructClient(fe, cache)
@@ -331,7 +331,7 @@ func TestParallelClients(t *testing.T) {
 		assert.True(t, opsSingle >= 3, "not enough requests processed: %d/3", opsSingle)
 		ops += opsSingle
 	}
-	assert.True(t, ops >= 40, "not enough requests processed: %d/40", ops)
+	assert.True(t, ops >= 30, "not enough requests processed: %d/30", ops)
 }
 
 // Tests the ability for deleted chunks to be fully cleaned up
