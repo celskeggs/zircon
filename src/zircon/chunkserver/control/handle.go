@@ -103,10 +103,6 @@ func (cs *chunkserver) Add(chunk apis.ChunkNum, initialData []byte, initialVersi
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	if initialVersion <= 0 {
-		return fmt.Errorf("initial version was not positive: %d/%d", chunk, initialVersion)
-	}
-
 	versions, err := cs.Storage.ListVersions(chunk)
 	if err != nil {
 		return err
