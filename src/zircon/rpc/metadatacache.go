@@ -2,10 +2,10 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"zircon/apis"
 	"zircon/rpc/twirp"
-	"errors"
 )
 
 // Connects to an RPC handler for a MetadataCache on a certain address.
@@ -43,7 +43,7 @@ func (p *proxyMetadataCacheAsTwirp) ReadEntry(ctx context.Context, request *twir
 			return nil, err
 		}
 		return &twirp.MetadataCache_ReadEntry_Result{
-			Owner: string(owner),
+			Owner:    string(owner),
 			OwnerErr: err.Error(),
 		}, nil
 	}
@@ -68,7 +68,7 @@ func (p *proxyMetadataCacheAsTwirp) UpdateEntry(ctx context.Context, request *tw
 	})
 	if owner != "" {
 		return &twirp.MetadataCache_UpdateEntry_Result{
-			Owner: string(owner),
+			Owner:    string(owner),
 			OwnerErr: err.Error(),
 		}, nil
 	}
@@ -79,13 +79,13 @@ func (p *proxyMetadataCacheAsTwirp) UpdateEntry(ctx context.Context, request *tw
 
 func (p *proxyMetadataCacheAsTwirp) DeleteEntry(ctx context.Context, request *twirp.MetadataCache_DeleteEntry) (*twirp.MetadataCache_DeleteEntry_Result, error) {
 	owner, err := p.server.DeleteEntry(apis.ChunkNum(request.Chunk), apis.MetadataEntry{
-		MostRecentVersion: apis.Version(request.PreviousEntry.MostRecentVersion),
+		MostRecentVersion:   apis.Version(request.PreviousEntry.MostRecentVersion),
 		LastConsumedVersion: apis.Version(request.PreviousEntry.LastConsumedVersion),
-		Replicas: IntArrayToIDArray(request.PreviousEntry.ServerIDs),
+		Replicas:            IntArrayToIDArray(request.PreviousEntry.ServerIDs),
 	})
 	if owner != "" {
 		return &twirp.MetadataCache_DeleteEntry_Result{
-			Owner: string(owner),
+			Owner:    string(owner),
 			OwnerErr: err.Error(),
 		}, nil
 	}
@@ -148,8 +148,8 @@ func (p *proxyTwirpAsMetadataCache) DeleteEntry(chunk apis.ChunkNum, previous ap
 		Chunk: uint64(chunk),
 		PreviousEntry: &twirp.MetadataEntry{
 			LastConsumedVersion: uint64(previous.LastConsumedVersion),
-			MostRecentVersion: uint64(previous.MostRecentVersion),
-			ServerIDs: IDArrayToIntArray(previous.Replicas),
+			MostRecentVersion:   uint64(previous.MostRecentVersion),
+			ServerIDs:           IDArrayToIntArray(previous.Replicas),
 		},
 	})
 	if result.Owner != "" {

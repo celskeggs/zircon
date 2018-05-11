@@ -1,18 +1,18 @@
 package chunkupdate
 
 import (
+	"errors"
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"math/rand"
+	"sort"
 	"testing"
 	"zircon/apis"
-	"zircon/rpc"
 	"zircon/apis/mocks"
-	"fmt"
-	"math/rand"
-	"errors"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/assert"
 	"zircon/chunkserver"
 	mocks2 "zircon/chunkupdate/mocks"
-	"sort"
+	"zircon/rpc"
 )
 
 // Testing strategy split throughout file
@@ -38,14 +38,14 @@ func GenericTestPerformRead(t *testing.T, offset uint32, length uint32, replicaF
 	}
 	data := make([]byte, length)
 	for i := 0; i < int(length); i++ {
-		data[i] = "fake"[i % 4]
+		data[i] = "fake"[i%4]
 	}
 
 	// ** prepare mocked etcd responses and chunkservers **
 
 	expectSuccess := false
 	var replicaAddresses []apis.ServerAddress
-	sizeFail := offset + length > apis.MaxChunkSize
+	sizeFail := offset+length > apis.MaxChunkSize
 
 	for id, fail := range replicaFails {
 		expectSuccess = expectSuccess || !fail
@@ -75,8 +75,8 @@ func GenericTestPerformRead(t *testing.T, offset uint32, length uint32, replicaF
 
 	resultData, resultVersion, err := (&Reference{
 		Replicas: replicaAddresses,
-		Version: version,
-		Chunk: chunk,
+		Version:  version,
+		Chunk:    chunk,
 	}).PerformRead(cache, offset, length)
 
 	if expectSuccess {
@@ -99,57 +99,69 @@ func GenericTestPerformRead(t *testing.T, offset uint32, length uint32, replicaF
 func TestPerformRead_NoReplicas_Empty(t *testing.T) {
 	GenericTestPerformRead(t, 2, 0, nil)
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, 0, n/a, 0, no
 func TestPerformRead_NoReplicas(t *testing.T) {
 	GenericTestPerformRead(t, 3, 128, nil)
 }
+
 // test case covers: 0, 1, fails, 1, no
 func TestPerformRead_OneReplica_Empty_Fail(t *testing.T) {
-	GenericTestPerformRead(t, 4, 0, []bool { true })
+	GenericTestPerformRead(t, 4, 0, []bool{true})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, 1, fails, 1, no
 func TestPerformRead_OneReplica_Fail(t *testing.T) {
-	GenericTestPerformRead(t, 5, 128, []bool { true })
+	GenericTestPerformRead(t, 5, 128, []bool{true})
 }
+
 // test case covers: 0, 1, doesn't fail, 0, yes
 func TestPerformRead_OneReplica_Pass_Empty(t *testing.T) {
-	GenericTestPerformRead(t, 0, 0, []bool { false })
-	GenericTestPerformRead(t, 6, 0, []bool { false })
+	GenericTestPerformRead(t, 0, 0, []bool{false})
+	GenericTestPerformRead(t, 6, 0, []bool{false})
 }
+
 // test case covers: apis.MaxChunkSize, 1, doesn't fail, 0, yes
 func TestPerformRead_OneReplica_Pass_Max(t *testing.T) {
-	GenericTestPerformRead(t, 0, apis.MaxChunkSize, []bool { false })
-	GenericTestPerformRead(t, 7, apis.MaxChunkSize-7, []bool { false })
+	GenericTestPerformRead(t, 0, apis.MaxChunkSize, []bool{false})
+	GenericTestPerformRead(t, 7, apis.MaxChunkSize-7, []bool{false})
 }
+
 // test case covers: >apis.MaxChunkSize, 1, doesn't fail, 0, no
 func TestPerformRead_OneReplica_Pass_OverFull(t *testing.T) {
-	GenericTestPerformRead(t, 0, apis.MaxChunkSize+1, []bool { false })
-	GenericTestPerformRead(t, 8, apis.MaxChunkSize-7, []bool { false })
+	GenericTestPerformRead(t, 0, apis.MaxChunkSize+1, []bool{false})
+	GenericTestPerformRead(t, 8, apis.MaxChunkSize-7, []bool{false})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, 1, doesn't fail, 0, yes
 func TestPerformRead_OneReplica_Pass(t *testing.T) {
-	GenericTestPerformRead(t, 0, 128, []bool { false })
-	GenericTestPerformRead(t, 9, 128, []bool { false })
+	GenericTestPerformRead(t, 0, 128, []bool{false})
+	GenericTestPerformRead(t, 9, 128, []bool{false})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, >1, fails, 1, yes
 func TestPerformRead_ManyReplicas_PartialFailure(t *testing.T) {
-	GenericTestPerformRead(t, 0, 512, []bool { true, false })
+	GenericTestPerformRead(t, 0, 512, []bool{true, false})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, >1, fails, 1<x<all, yes
 func TestPerformRead_ManyReplicas_PartialFailure_Large(t *testing.T) {
-	GenericTestPerformRead(t, 0, 512, []bool { true, true, true, false, true })
+	GenericTestPerformRead(t, 0, 512, []bool{true, true, true, false, true})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, >1, fails, all, no
 func TestPerformRead_ManyReplicas_Fail(t *testing.T) {
-	GenericTestPerformRead(t, 0, 512, []bool { true, true, true, true, true })
+	GenericTestPerformRead(t, 0, 512, []bool{true, true, true, true, true})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, >1, doesn't fail, 1<x<all, yes
 func TestPerformRead_ManyReplicas_PassFirst(t *testing.T) {
-	GenericTestPerformRead(t, 0, 512, []bool { false, true, true, true, true })
+	GenericTestPerformRead(t, 0, 512, []bool{false, true, true, true, true})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, >1, doesn't fail, 0, yes
 func TestPerformRead_ManyReplicas_PassAll(t *testing.T) {
-	GenericTestPerformRead(t, 0, 512, []bool { false, false, false })
+	GenericTestPerformRead(t, 0, 512, []bool{false, false, false})
 }
 
 //   PrepareWrite partitions:
@@ -167,7 +179,7 @@ func GenericTestPrepareWrite(t *testing.T, offset uint32, length uint32, replica
 	chunk := apis.ChunkNum(rand.Uint64())
 	data := make([]byte, length)
 	for i := 0; i < int(length); i++ {
-		data[i] = "fake"[i % 4]
+		data[i] = "fake"[i%4]
 	}
 
 	expectedHash := apis.CalculateCommitHash(offset, data)
@@ -197,7 +209,7 @@ func GenericTestPrepareWrite(t *testing.T, offset uint32, length uint32, replica
 		}
 	}
 
-	if offset + length > apis.MaxChunkSize || len(replicaFails) == 0 {
+	if offset+length > apis.MaxChunkSize || len(replicaFails) == 0 {
 		expectSuccess = false
 	}
 
@@ -205,8 +217,8 @@ func GenericTestPrepareWrite(t *testing.T, offset uint32, length uint32, replica
 
 	hash, err := (&Reference{
 		Replicas: replicaAddresses,
-		Version: 5,
-		Chunk: chunk,
+		Version:  5,
+		Chunk:    chunk,
 	}).PrepareWrite(cache, offset, data)
 
 	if expectSuccess {
@@ -231,44 +243,54 @@ func GenericTestPrepareWrite(t *testing.T, offset uint32, length uint32, replica
 func TestPrepareWrite_NoReplicas_Empty(t *testing.T) {
 	GenericTestPrepareWrite(t, 1, 0, nil)
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, 0, 0, no
 func TestPrepareWrite_NoReplicas(t *testing.T) {
 	GenericTestPrepareWrite(t, 2, 128, nil)
 }
+
 // test case covers: 0, 1, 0, yes
 func TestPrepareWrite_OneReplica_Empty(t *testing.T) {
-	GenericTestPrepareWrite(t, 3, 0, []bool{ false })
+	GenericTestPrepareWrite(t, 3, 0, []bool{false})
 }
+
 // test case covers: 0, 1, 1, no
 func TestPrepareWrite_OneReplica_Fail_Empty(t *testing.T) {
-	GenericTestPrepareWrite(t, 4, 0, []bool{ true })
+	GenericTestPrepareWrite(t, 4, 0, []bool{true})
 }
+
 // test case covers: 0, >1, 0, yes
 func TestPrepareWrite_ManyReplicas_Empty(t *testing.T) {
-	GenericTestPrepareWrite(t, 5, 0, []bool{ false, false, false })
+	GenericTestPrepareWrite(t, 5, 0, []bool{false, false, false})
 }
+
 // test case covers: 0, >1, 1<x<all, no
 func TestPrepareWrite_ManyReplicas_PartialFail_Empty(t *testing.T) {
-	GenericTestPrepareWrite(t, 6, 0, []bool{ false, true, false })
+	GenericTestPrepareWrite(t, 6, 0, []bool{false, true, false})
 }
+
 // test case covers: apis.MaxChunkSize, 1, 0, yes
 func TestPrepareWrite_OneReplica_Max(t *testing.T) {
-	GenericTestPrepareWrite(t, 0, apis.MaxChunkSize, []bool{ false })
-	GenericTestPrepareWrite(t, 7, apis.MaxChunkSize - 7, []bool{ false })
+	GenericTestPrepareWrite(t, 0, apis.MaxChunkSize, []bool{false})
+	GenericTestPrepareWrite(t, 7, apis.MaxChunkSize-7, []bool{false})
 }
+
 // test case covers: >apis.MaxChunkSize, 1, 0, no
 func TestPrepareWrite_OneReplica_OverMax(t *testing.T) {
-	GenericTestPrepareWrite(t, 0, apis.MaxChunkSize + 1, []bool{ false })
-	GenericTestPrepareWrite(t, 8, apis.MaxChunkSize - 7, []bool{ false })
+	GenericTestPrepareWrite(t, 0, apis.MaxChunkSize+1, []bool{false})
+	GenericTestPrepareWrite(t, 8, apis.MaxChunkSize-7, []bool{false})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, 1, 0, yes
 func TestPrepareWrite_OneReplica(t *testing.T) {
-	GenericTestPrepareWrite(t, 9, 128, []bool { false })
+	GenericTestPrepareWrite(t, 9, 128, []bool{false})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, 1, 1, no
 func TestPrepareWrite_OneReplica_Fail(t *testing.T) {
-	GenericTestPrepareWrite(t, 10, 128, []bool { true })
+	GenericTestPrepareWrite(t, 10, 128, []bool{true})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, >1, 1, no  (note: tries many times to ensure consistency)
 func TestPrepareWrite_ManyReplicas_ExactlyOneFail(t *testing.T) {
 	for i := uint32(0); i < 50; i++ {
@@ -279,17 +301,20 @@ func TestPrepareWrite_ManyReplicas_ExactlyOneFail(t *testing.T) {
 		}
 	}
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, >1, all, no
 func TestPrepareWrite_ManyReplicas_AllFail(t *testing.T) {
-	GenericTestPrepareWrite(t, 11, 128, []bool { true, true, true, true, true })
+	GenericTestPrepareWrite(t, 11, 128, []bool{true, true, true, true, true})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, >1, 1<x<all, no
 func TestPrepareWrite_ManyReplicas_SomeFail(t *testing.T) {
-	GenericTestPrepareWrite(t, 12, 128, []bool { false, true, true, false, true, false })
+	GenericTestPrepareWrite(t, 12, 128, []bool{false, true, true, false, true, false})
 }
+
 // test case covers: 0<x<apis.MaxChunkSize, >1, 0, yes
 func TestPrepareWrite_ManyReplicas(t *testing.T) {
-	GenericTestPrepareWrite(t, 13, 512, []bool { false, false, false, false, false, false })
+	GenericTestPrepareWrite(t, 13, 512, []bool{false, false, false, false, false, false})
 }
 
 //   ReadMeta partitions:
@@ -372,30 +397,37 @@ func GenericTestReadMeta(t *testing.T, exists bool, mrv apis.Version, lcv apis.V
 func TestReadMeta_NonExistent(t *testing.T) {
 	GenericTestReadMeta(t, false, 1, 1, 1)
 }
+
 // test case covers: exists, 0, 0, same, 0, yes
 func TestReadMeta_JustCreated_NoReplicas(t *testing.T) {
 	GenericTestReadMeta(t, true, 0, 0, 0)
 }
+
 // test case covers: exists, 0, 0, same, >0, yes
 func TestReadMeta_JustCreated_SomeReplicas(t *testing.T) {
 	GenericTestReadMeta(t, true, 0, 0, 5)
 }
+
 // test case covers: exists, 0, >0, one off, >0, yes
 func TestReadMeta_NearNew(t *testing.T) {
 	GenericTestReadMeta(t, true, 0, 1, 3)
 }
+
 // test case covers: exists, >0, >0, same, >0, yes
 func TestReadMeta_Populated(t *testing.T) {
 	GenericTestReadMeta(t, true, 55, 55, 5)
 }
+
 // test case covers: exists, >0, >0, one off, >0, yes
 func TestReadMeta_DifferentVersions(t *testing.T) {
 	GenericTestReadMeta(t, true, 88, 89, 4)
 }
+
 // test case covers: exists, >0, >0, further off, >0, yes
 func TestReadMeta_FarOffVersions(t *testing.T) {
 	GenericTestReadMeta(t, true, 44, 1514324, 8)
 }
+
 // test case covers: currently deleting, >0, 0, further off, >0, no
 func TestReadMeta_CurrentlyDeleting(t *testing.T) {
 	GenericTestReadMeta(t, true, 0xFFFFFFFFFFFFFFFF, 0, 3)
@@ -499,22 +531,27 @@ func GenericTestNew(t *testing.T, replicas int, chunkservers int) {
 func TestNew_NoReplicas_AtAll(t *testing.T) {
 	GenericTestNew(t, 0, 0)
 }
+
 // test case covers: 0, <, no
 func TestNew_NoReplicas_Chosen(t *testing.T) {
 	GenericTestNew(t, 0, 3)
 }
+
 // test case covers: 1, =, yes
 func TestNew_OneOfOneReplica(t *testing.T) {
 	GenericTestNew(t, 1, 1)
 }
+
 // test case covers: 1, <, yes
 func TestNew_OneReplica(t *testing.T) {
 	GenericTestNew(t, 1, 3)
 }
+
 // test case covers: >1, >, no
 func TestNew_NotEnoughReplicas(t *testing.T) {
 	GenericTestNew(t, 2, 1)
 }
+
 // test case covers: >1, =, yes
 func TestNew_ExactlyEnoughReplicas(t *testing.T) {
 	GenericTestNew(t, 7, 7)
@@ -626,33 +663,40 @@ func GenericTestCommitWrite(t *testing.T, exists bool, deleting bool, replicaFai
 func TestCommitWrite_NoExist(t *testing.T) {
 	GenericTestCommitWrite(t, false, false, nil, 0)
 }
+
 // test case covers: exists, 0, 0, n/a, no
 func TestCommitWrite_NoReplicas(t *testing.T) {
 	GenericTestCommitWrite(t, true, false, nil, 0)
 }
+
 // test case covers: exists, 1, 0, matches, yes
 func TestCommitWrite_OneReplica_Pass(t *testing.T) {
-	GenericTestCommitWrite(t, true, false, []bool { false }, 0)
+	GenericTestCommitWrite(t, true, false, []bool{false}, 0)
 }
+
 // test case covers: exists, >1, >0, matches, no
 func TestCommitWrite_ManyReplicas_Fail(t *testing.T) {
-	GenericTestCommitWrite(t, true, false, []bool { false, false, true, false }, 0)
+	GenericTestCommitWrite(t, true, false, []bool{false, false, true, false}, 0)
 }
+
 // test case covers: exists, >1, 0, matches, yes
 func TestCommitWrite_ManyReplicas_Pass(t *testing.T) {
-	GenericTestCommitWrite(t, true, false, []bool { false, false, false, false }, 0)
+	GenericTestCommitWrite(t, true, false, []bool{false, false, false, false}, 0)
 }
+
 // test case covers: exists, 1, 0, request newer, no
 func TestCommitWrite_OneReplicas_TooNew(t *testing.T) {
-	GenericTestCommitWrite(t, true, false, []bool { false, false, false, false }, 1)
+	GenericTestCommitWrite(t, true, false, []bool{false, false, false, false}, 1)
 }
+
 // test case covers: exists, 1, 0, request older, no
 func TestCommitWrite_OneReplicas_TooOld(t *testing.T) {
-	GenericTestCommitWrite(t, true, false, []bool { false, false, false, false }, -1)
+	GenericTestCommitWrite(t, true, false, []bool{false, false, false, false}, -1)
 }
+
 // test case covers: currently deleting, 1, 0, matches, no
 func TestCommitWrite_CurrentlyDeleting(t *testing.T) {
-	GenericTestCommitWrite(t, true, true, []bool { false }, 0)
+	GenericTestCommitWrite(t, true, true, []bool{false}, 0)
 }
 
 //   Delete
@@ -706,30 +750,21 @@ func GenericTestDelete(t *testing.T, exists bool, deleting bool, replicaFailsLis
 		} else {
 			// afterwards
 			if failDelete {
-				chunkMock.On("ListAllChunks").Return([]struct {
-					Chunk   apis.ChunkNum
-					Version apis.Version
-				}{
+				chunkMock.On("ListAllChunks").Return([]apis.ChunkVersion{
 					{chunk, version + 1},
 					{otherChunk, version},
 					{otherChunk, 3},
 					{otherChunk, version + 1},
 				}, nil)
 			} else {
-				chunkMock.On("ListAllChunks").Return([]struct {
-					Chunk   apis.ChunkNum
-					Version apis.Version
-				}{
+				chunkMock.On("ListAllChunks").Return([]apis.ChunkVersion{
 					{otherChunk, version},
 					{otherChunk, 3},
 					{otherChunk, version + 1},
 				}, nil)
 			}
 			// beforehand
-			chunkMock.On("ListAllChunks").Return([]struct {
-				Chunk apis.ChunkNum
-				Version apis.Version
-			}{
+			chunkMock.On("ListAllChunks").Return([]apis.ChunkVersion{
 				{chunk, version},
 				{chunk, version + 1},
 				{otherChunk, version},
@@ -738,9 +773,9 @@ func GenericTestDelete(t *testing.T, exists bool, deleting bool, replicaFailsLis
 			}, nil)
 			chunkMock.On("Delete", chunk, version).Return(nil)
 			if failDelete {
-				chunkMock.On("Delete", chunk, version + 1).Return(errors.New("sample deletion error"))
+				chunkMock.On("Delete", chunk, version+1).Return(errors.New("sample deletion error"))
 			} else {
-				chunkMock.On("Delete", chunk, version + 1).Return(nil)
+				chunkMock.On("Delete", chunk, version+1).Return(nil)
 			}
 		}
 	}
@@ -791,35 +826,43 @@ func GenericTestDelete(t *testing.T, exists bool, deleting bool, replicaFailsLis
 func TestDelete_NoExist(t *testing.T) {
 	GenericTestDelete(t, false, false, nil, false, 0)
 }
+
 // test case covers: exists, 0, 0, 0, n/a, yes
 func TestDelete_NoReplicas(t *testing.T) {
 	GenericTestDelete(t, true, false, nil, false, 0)
 }
+
 // test case covers: exists, 1, 0, 0, matches, yes
 func TestDelete_OneReplica(t *testing.T) {
-	GenericTestDelete(t, true, false, []bool { false }, false, 0)
+	GenericTestDelete(t, true, false, []bool{false}, false, 0)
 }
+
 // test case covers: exists, 1, 0, 0, request newer, no
 func TestDelete_OneReplica_Newer(t *testing.T) {
-	GenericTestDelete(t, true, false, []bool { false }, false, 1)
+	GenericTestDelete(t, true, false, []bool{false}, false, 1)
 }
+
 // test case covers: exists, 1, 0, 0, request older, no
 func TestDelete_OneReplica_Older(t *testing.T) {
-	GenericTestDelete(t, true, false, []bool { false }, false, -1)
+	GenericTestDelete(t, true, false, []bool{false}, false, -1)
 }
+
 // test case covers: exists, >1, 0, 0, matches, yes
 func TestDelete_ManyReplicas(t *testing.T) {
-	GenericTestDelete(t, true, false, []bool { false, false, false }, false, 0)
+	GenericTestDelete(t, true, false, []bool{false, false, false}, false, 0)
 }
+
 // test case covers: exists, >1, >0, 0, matches, no
 func TestDelete_ManyReplicas_FailList(t *testing.T) {
-	GenericTestDelete(t, true, false, []bool { false, true, false }, false, 0)
+	GenericTestDelete(t, true, false, []bool{false, true, false}, false, 0)
 }
+
 // test case covers: exists, 1, 0, >0, matches, no
 func TestDelete_OneReplica_FailDelete(t *testing.T) {
-	GenericTestDelete(t, true, false, []bool { false }, true, 0)
+	GenericTestDelete(t, true, false, []bool{false}, true, 0)
 }
+
 // test case covers: currently deleting, 1, 0, 0, matches, no
 func TestDelete_CurrentlyDeleting(t *testing.T) {
-	GenericTestDelete(t, true, true, []bool { false }, false, 0)
+	GenericTestDelete(t, true, true, []bool{false}, false, 0)
 }

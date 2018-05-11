@@ -2,10 +2,10 @@ package chunkserver
 
 import (
 	"errors"
+	"fmt"
 	"zircon/apis"
 	"zircon/rpc"
 	"zircon/util"
-	"fmt"
 )
 
 type wrapper struct {
@@ -18,10 +18,7 @@ func WithChatter(server apis.ChunkserverSingle, conncache rpc.ConnectionCache) (
 	return &wrapper{Single: server, Cache: conncache}, nil
 }
 
-func (w *wrapper) ListAllChunks() ([]struct {
-	Chunk   apis.ChunkNum
-	Version apis.Version
-}, error) {
+func (w *wrapper) ListAllChunks() ([]apis.ChunkVersion, error) {
 	return w.Single.ListAllChunks()
 }
 

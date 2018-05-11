@@ -15,6 +15,11 @@ const MaxChunkSize = 8 * 1024 * 1024
 // Represents "any version is valid" when passed as a chunk version number
 const AnyVersion Version = 0
 
+type ChunkVersion struct {
+	Chunk   ChunkNum
+	Version Version
+}
+
 // note: this API is strongly consistent, because it's a connection to just a single chunkserver
 type Chunkserver interface {
 	ChunkserverSingle
@@ -73,8 +78,5 @@ type ChunkserverSingle interface {
 
 	// Requests a list of all chunks currently held by this chunkserver.
 	// There is no guaranteed order for the returned slice.
-	ListAllChunks() ([]struct {
-		Chunk   ChunkNum
-		Version Version
-	}, error)
+	ListAllChunks() ([]ChunkVersion, error)
 }

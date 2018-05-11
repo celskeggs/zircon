@@ -150,19 +150,13 @@ func TestChunkserver_ListAllChunks_Pass(t *testing.T) {
 	mocked, teardown, server := beginChunkserverTest(t)
 	defer teardown()
 
-	mocked.On("ListAllChunks").Return([]struct {
-		Chunk   apis.ChunkNum
-		Version apis.Version
-	}{
+	mocked.On("ListAllChunks").Return([]apis.ChunkVersion{
 		{81, 68}, {82, 69},
 	}, nil)
 
 	chunks, err := server.ListAllChunks()
 	assert.NoError(t, err)
-	assert.Equal(t, []struct {
-		Chunk   apis.ChunkNum
-		Version apis.Version
-	}{
+	assert.Equal(t, []apis.ChunkVersion{
 		{81, 68}, {82, 69},
 	}, chunks)
 }
@@ -171,10 +165,7 @@ func TestChunkserver_ListAllChunks_Fail(t *testing.T) {
 	mocked, teardown, server := beginChunkserverTest(t)
 	defer teardown()
 
-	mocked.On("ListAllChunks").Return([]struct {
-		Chunk   apis.ChunkNum
-		Version apis.Version
-	}{},
+	mocked.On("ListAllChunks").Return([]apis.ChunkVersion{},
 		errors.New("hello world 09"))
 
 	chunks, err := server.ListAllChunks()

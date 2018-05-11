@@ -1,26 +1,18 @@
-package client
+package integration
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"zircon/apis"
 	"zircon/util"
 )
 
-// NOTE: Only simple tests are provided here. Everything else should either go into control/client_test.go or should be
-// end-to-end tests that cover more than just this subsystem.
-
 // Tests the ability for a single client to properly interact with a cluster, and
 // perform a simple series of new, read, write, and delete operations, including
 // correct error handling.
 func TestSimpleClientReadWrite(t *testing.T) {
-	config, _, teardown := PrepareNetworkedCluster(t)
+	client, teardown := PrepareNetworkedCluster(t)
 	defer teardown()
-
-	client, err := ConfigureNetworkedClient(config)
-	require.NoError(t, err)
-	defer client.Close()
 
 	cn, err := client.New()
 	assert.NoError(t, err)
