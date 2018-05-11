@@ -4,6 +4,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"testing"
 	"zircon/chunkserver/storage"
+	"os"
+	"io/ioutil"
 )
 
 func TestMemoryStorage(t *testing.T) {
@@ -23,9 +25,7 @@ func TestMemoryStorage(t *testing.T) {
 	TestVersionStorage(openStorage, closeStorage, resetStorage, t)
 }
 
-/*
 func TestFilesystemStorage(t *testing.T) {
-	// TODO: once we have filesystem storage implemented
 	dir, err := ioutil.TempDir("", "filesystem-test-")
 	require.NoError(t, err)
 	defer func() {
@@ -37,7 +37,7 @@ func TestFilesystemStorage(t *testing.T) {
 	working := dir + "/test"
 	require.NoError(t, os.Mkdir(working, 0755))
 	openStorage := func() storage.ChunkStorage {
-		cs, err := storage.ConfigureFilesystemStorage(dir)
+		cs, err := storage.ConfigureFilesystemStorage(working)
 		require.NoError(t, err)
 		return cs
 	}
@@ -51,7 +51,6 @@ func TestFilesystemStorage(t *testing.T) {
 	TestChunkStorage(openStorage, closeStorage, resetStorage, t)
 	TestVersionStorage(openStorage, closeStorage, resetStorage, t)
 }
-*/
 
 /*
 func TestBlockStorage(t *testing.T) {

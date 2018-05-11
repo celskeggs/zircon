@@ -123,7 +123,7 @@ func (cs *chunkserver) Delete(chunk apis.ChunkNum, version apis.Version) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	if version <= 0 {
+	if version < 0 {
 		return fmt.Errorf("deleted version was not positive: %d/%d", chunk, version)
 	}
 
