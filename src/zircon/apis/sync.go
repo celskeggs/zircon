@@ -20,7 +20,8 @@ type SyncServerDirect interface {
 // TODO: we can probably associate some metadata with acquired locks, so that a server can recover its previous operations
 // i.e. list and identify its old syncs, fetch client metadata
 type SyncServer interface {
+	SyncServerDirect
 
-	// Gets the root chunk used by the filesystem.
+	// Gets the root chunk used by the filesystem. NEVER zero. NEVER changes.
 	GetFSRoot() (ChunkNum, error)
 }

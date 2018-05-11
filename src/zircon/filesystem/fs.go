@@ -7,10 +7,39 @@ import (
 	"time"
 	"errors"
 	"zircon/apis"
+	"zircon/client"
+	"zircon/rpc"
+	"zircon/filesystem/syncserver"
+	"fmt"
 )
 
 type filesystem struct {
 	t *Traverser
+}
+
+type Configuration struct {
+	ClientConfig        client.Configuration
+	SyncServerAddresses []apis.ServerAddress
+}
+
+func NewFilesystemClient(config Configuration) (Filesystem, error) {
+	if len(config.SyncServerAddresses) == 0 {
+		return nil, errors.New("no syncservers specified")
+	}
+	cli, err := client.ConfigureNetworkedClient(config.ClientConfig)
+	if err != nil {
+		return nil, err
+	}
+	sscache := rpc.NewConnectionCache()
+	var ss []apis.SyncServer
+	for _, ssaddr := range config.SyncServerAddresses {
+		server, err := sscache.SubscribeSyncServer(ssaddr)
+		if err != nil {
+			return nil, err
+		}
+		ss = append(ss, server)
+	}
+	return NewFilesystem(cli, syncserver.RoundRobin(ss)), nil
 }
 
 func NewFilesystem(client apis.Client, sync apis.SyncServer) Filesystem {
@@ -174,6 +203,23 @@ func (f *filesystem) ReadLink(path string) (string, error) {
 	return link, nil
 }
 
+func (f *filesystem) ListDir(path string) ([]string, error) {
+	ref, err := f.t.PathDir(path)
+	if err != nil {
+		return nil, err
+	}
+	defer ref.Release()
+	entries, _, err := ref.listEntries()
+	if err != nil {
+		return nil, err
+	}
+	elements := make([]string, len(entries))
+	for i, entry := range entries {
+		elements[i] = entry.Name
+	}
+	return elements, nil
+}
+
 func (f *filesystem) Truncate(path string, length uint32) error {
 	ref, err := f.t.PathDir(path2.Dir(path))
 	if err != nil {
@@ -189,11 +235,6 @@ func (f *filesystem) Truncate(path string, length uint32) error {
 }
 
 func (f *filesystem) OpenRead(path string) (ReadSeekCloser, error) {
-	return f.OpenWrite(path)
-}
-
-// NOTE: closing this is INCREDIBLY IMPORTANT
-func (f *filesystem) OpenWrite(path string) (ReadWriteSeekCloser, error) {
 	ref, err := f.t.PathDir(path2.Dir(path))
 	if err != nil {
 		return nil, err
@@ -202,6 +243,29 @@ func (f *filesystem) OpenWrite(path string) (ReadWriteSeekCloser, error) {
 	file, err := ref.LookupFile(path2.Base(path))
 	if err != nil {
 		return nil, err
+	}
+	return &fileStream{
+		f: file,
+	}, nil
+}
+
+// NOTE: closing file results is INCREDIBLY IMPORTANT
+func (f *filesystem) OpenWrite(path string) (ReadWriteSeekCloser, error) {
+	ref, err := f.t.PathDir(path2.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer ref.Release()
+	file, err := ref.LookupFile(path2.Base(path))
+	if err != nil {
+		err2 := ref.NewFile(path2.Base(path))
+		if err2 != nil {
+			return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
+		}
+		file, err2 = ref.LookupFile(path2.Base(path))
+		if err2 != nil {
+			return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
+		}
 	}
 	return &fileStream{
 		f: file,
@@ -234,6 +298,9 @@ func (f *fileStream) Read(p []byte) (n int, err error) {
 	data, err := f.f.Read(f.head, uint32(len(p)))
 	if err != nil {
 		return 0, err
+	}
+	if len(data) == 0 && len(p) > 0 {
+		return 0, io.EOF
 	}
 	copy(p, data)
 	f.head += uint32(len(data))

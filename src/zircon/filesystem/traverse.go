@@ -6,7 +6,7 @@ import (
 	"zircon/util"
 	"github.com/pkg/errors"
 	"fmt"
-	"strings"
+	path2 "path"
 )
 
 type Traverser struct {
@@ -49,16 +49,40 @@ func (t Traverser) Root() (*Reference, error) {
 	return &Reference{
 		chunk: root,
 		unlocker: lock,
+		t: t,
 	}, nil
 }
 
+func splitPathMany(path string) []string {
+	if path[0] != '/' {
+		panic("invalid absolute path to splitPathMany")
+	}
+	var components []string
+	for path != "/" {
+		if path[len(path) - 1] == '/' {
+			path = path[:len(path) - 1]
+		}
+		dir, base := path2.Dir(path), path2.Base(path)
+		path = dir
+		components = append(components, base)
+	}
+	reverse := make([]string, len(components))
+	for i, elem := range components {
+		reverse[len(reverse) - i - 1] = elem
+	}
+	return reverse
+}
+
 func (t Traverser) PathDir(path string) (*Reference, error) {
+	if path[0] != '/' {
+		return nil, errors.New("path is not absolute!")
+	}
 	// TODO: traverse symlinks
 	directory, err := t.Root()
 	if err != nil {
 		return nil, err
 	}
-	for _, elem := range strings.Split(path, "/") {
+	for _, elem := range splitPathMany(path) {
 		// invariant: each time around the loop, we have exactly one lock, which is a read lock on 'directory'
 		ndir, err := directory.LookupDir(elem)
 		directory.Release()
@@ -513,12 +537,12 @@ func (f *File) Write(offset uint32, data []byte) error {
 			// this means we need to write a block of zeroes too
 			padded := make([]byte, offset + dlen - length)
 			copy(padded[offset - length:], data)
-			ver, err = f.t.client.Write(f.chunk, length, ver, padded)
+			ver, err = f.t.client.Write(f.chunk, 4 + length, ver, padded)
 			if err != nil {
 				return err
 			}
 		} else {
-			ver, err = f.t.client.Write(f.chunk, offset, ver, data)
+			ver, err = f.t.client.Write(f.chunk, 4 + offset, ver, data)
 			if err != nil {
 				return err
 			}
@@ -531,7 +555,7 @@ func (f *File) Write(offset uint32, data []byte) error {
 			return err
 		}
 	} else {
-		_, err = f.t.client.Write(f.chunk, offset, ver, data)
+		_, err = f.t.client.Write(f.chunk, 4 + offset, ver, data)
 		if err != nil {
 			// TODO: retry on version mismatch failure (for all)
 			return err

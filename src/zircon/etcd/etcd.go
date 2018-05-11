@@ -12,7 +12,6 @@ import (
 	"time"
 	"zircon/apis"
 	"encoding/binary"
-	"github.com/coreos/etcd/etcdserver/etcdserverpb"
 )
 
 type etcdinterface struct {
@@ -466,6 +465,12 @@ func encodeChunk(chunk apis.ChunkNum) string {
 	return string(bin)
 }
 
+func decodeChunk(c []byte) apis.ChunkNum {
+	return apis.ChunkNum(binary.LittleEndian.Uint64(c))
+}
+
+const NoSync apis.SyncID = 0
+
 func (e *etcdinterface) nextSyncID() (apis.SyncID, error) {
 	resp, err := e.Client.Get(context.Background(), FilesystemNextSyncKey)
 	if err != nil {
@@ -476,8 +481,8 @@ func (e *etcdinterface) nextSyncID() (apis.SyncID, error) {
 		var lastID apis.SyncID
 		txn := e.Client.Txn(context.Background())
 		if len(kvs) != 0 {
-			lastID = apis.SyncID(binary.LittleEndian.Uint64(resp.Kvs[0].Value))
-			txn = txn.If(clientv3.Compare(clientv3.Value(FilesystemNextSyncKey), "=", string(resp.Kvs[0].Value)))
+			lastID = apis.SyncID(binary.LittleEndian.Uint64(kvs[0].Value))
+			txn = txn.If(clientv3.Compare(clientv3.Value(FilesystemNextSyncKey), "=", string(kvs[0].Value)))
 		} else {
 			txn = txn.If(clientv3.Compare(clientv3.CreateRevision(FilesystemNextSyncKey), "=", 0))
 		}
@@ -494,83 +499,5 @@ func (e *etcdinterface) nextSyncID() (apis.SyncID, error) {
 		}
 		kvs = tresp.Responses[0].GetResponseRange().Kvs
 		// try again!
-	}
-}
-
-// Acquires a read lock on a certain chunk
-func (e *etcdinterface) StartSync(chunk apis.ChunkNum) (apis.SyncID, error) {
-	syncid, err := e.nextSyncID()
-	if err != nil {
-		return 0, err
-	}
-	writeKey := fmt.Sprintf("/fs/write/%d", chunk)
-	readKey := fmt.Sprintf("/fs/read/%d", chunk)
-	syncKey := fmt.Sprintf("/fs/sync/%d", syncid)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	watch := e.Client.Watcher.Watch(ctx, chunkKey)
-	for {
-		resp, err := e.Client.Txn(context.Background()).
-			If(clientv3.Compare(clientv3.CreateRevision(chunkKey), "=", 0)).
-			Then(clientv3.OpPut(chunkKey, encodeSync(syncid)), clientv3.OpPut(syncKey, encodeChunk(chunk))).
-			Commit()
-		if err != nil {
-			return 0, err
-		}
-		if resp.Succeeded {
-			return syncid, nil
-		}
-		// wait for the lock to become available
-		// TODO: think about failure modes re: client timeouts, crashes
-		<-watch
-	}
-}
-
-// Derives a write lock from a read lock on a certain chunk
-func (e *etcdinterface) UpgradeSync(s apis.SyncID) (apis.SyncID, error) {
-	syncid, err := e.nextSyncID()
-	if err != nil {
-		return 0, err
-	}
-
-}
-
-// Releases a lock on a chunk
-func (e *etcdinterface) ReleaseSync(s apis.SyncID) error {
-
-}
-
-// Confirms that a sync is still valid -- remember that this has race conditions; avoid its usage
-func (e *etcdinterface) ConfirmSync(s apis.SyncID) (write bool, err error) {
-
-}
-
-const FilesystemRootKey = "/fs/root"
-
-func (e *etcdinterface) ReadFSRoot() (apis.ChunkNum, error) {
-	resp, err := e.Client.Get(context.Background(), FilesystemRootKey)
-	if err != nil {
-		return 0, err
-	}
-	if len(resp.Kvs) == 0 {
-		return 0, nil
-	} else {
-		return apis.ChunkNum(binary.LittleEndian.Uint64(resp.Kvs[0].Value)), nil
-	}
-}
-
-func (e *etcdinterface) WriteFSRoot(chunk apis.ChunkNum) (error) {
-	nchunk := make([]byte, 8)
-	binary.LittleEndian.PutUint64(nchunk, uint64(chunk))
-	resp, err := e.Client.Txn(context.Background()).
-		If(clientv3.Compare(clientv3.CreateRevision(FilesystemRootKey), "=", 0)).
-		Then(clientv3.OpPut(FilesystemRootKey, string(nchunk))).
-		Commit()
-	if err != nil {
-		return err
-	} else if !resp.Succeeded {
-		return errors.New("found existing filesystem root")
-	} else {
-		return nil
 	}
 }

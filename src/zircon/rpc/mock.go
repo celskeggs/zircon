@@ -9,6 +9,7 @@ type MockCache struct {
 	Frontends      map[apis.ServerAddress]apis.Frontend
 	Chunkservers   map[apis.ServerAddress]apis.Chunkserver
 	MetadataCaches map[apis.ServerAddress]apis.MetadataCache
+	SyncServers    map[apis.ServerAddress]apis.SyncServer
 }
 
 var _ ConnectionCache = &MockCache{}
@@ -37,6 +38,15 @@ func (mc *MockCache) SubscribeMetadataCache(address apis.ServerAddress) (apis.Me
 		return mdc, nil
 	} else {
 		return nil, fmt.Errorf("no such metadata cache: %s", address)
+	}
+}
+
+func (mc *MockCache) SubscribeSyncServer(address apis.ServerAddress) (apis.SyncServer, error) {
+	ss, found := mc.SyncServers[address]
+	if found {
+		return ss, nil
+	} else {
+		return nil, fmt.Errorf("no such sync server: %s", address)
 	}
 }
 
