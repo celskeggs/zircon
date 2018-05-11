@@ -183,20 +183,14 @@ func (p *proxyTwirpAsChunkserver) Delete(chunk apis.ChunkNum, version apis.Versi
 	return err
 }
 
-func (p *proxyTwirpAsChunkserver) ListAllChunks() ([]struct {
-	Chunk   apis.ChunkNum
-	Version apis.Version
-}, error) {
+func (p *proxyTwirpAsChunkserver) ListAllChunks() ([]apis.ChunkVersion, error) {
 	result, err := p.server.ListAllChunks(context.Background(), &twirp.Nothing{})
-	decoded := make([]struct {
-		Chunk   apis.ChunkNum
-		Version apis.Version
-	}, len(result.Chunks))
+	decoded := make([]apis.ChunkVersion, len(result.Chunks))
 	for i, v := range result.Chunks {
-		decoded[i] = struct {
-			Chunk   apis.ChunkNum
-			Version apis.Version
-		}{Chunk: apis.ChunkNum(v.Chunk), Version: apis.Version(v.Version)}
+		decoded[i] = apis.ChunkVersion{
+			Chunk:   apis.ChunkNum(v.Chunk),
+			Version: apis.Version(v.Version),
+		}
 	}
 	return decoded, err
 }

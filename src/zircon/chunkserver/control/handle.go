@@ -53,17 +53,11 @@ func checkInvariantSameChunks(a []apis.ChunkNum, b []apis.ChunkNum) {
 	}
 }
 
-func (cs *chunkserver) ListAllChunks() ([]struct {
-	Chunk   apis.ChunkNum
-	Version apis.Version
-}, error) {
+func (cs *chunkserver) ListAllChunks() ([]apis.ChunkVersion, error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
-	var result []struct {
-		Chunk   apis.ChunkNum
-		Version apis.Version
-	}
+	var result []apis.ChunkVersion
 	latestChunks, err := cs.Storage.ListChunksWithLatest()
 	if err != nil {
 		return nil, err

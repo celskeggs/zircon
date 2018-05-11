@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"gopkg.in/yaml.v2"
+	"log"
 	"os"
 	"zircon/apis"
 	"zircon/chunkserver"
@@ -10,19 +11,19 @@ import (
 	"zircon/chunkserver/storage"
 	"zircon/client"
 	"zircon/client/demo"
-	"zircon/rpc"
-	"zircon/filesystem"
 	"zircon/etcd"
+	"zircon/filesystem"
+	"zircon/filesystem/fuse"
+	"zircon/filesystem/syncserver"
 	"zircon/frontend"
 	"zircon/metadatacache"
-	"zircon/filesystem/syncserver"
-	"zircon/filesystem/fuse"
-	"log"
+	"zircon/rpc"
+	"zircon/services"
 )
 
 type Config struct {
 	ServerName apis.ServerName `yaml:"server-name"`
-	Address     apis.ServerAddress
+	Address    apis.ServerAddress
 
 	StorageType string `yaml:"storage-type"`
 	StoragePath string `yaml:"storage-path"`
@@ -203,8 +204,8 @@ func LaunchFuse(config *Config) error {
 	log.Printf("launching fuse mounter...\n")
 
 	return fuse.MountFuse(filesystem.Configuration{
-		ClientConfig: config.ClientConfig,
-		MountPoint: config.MountPoint,
+		ClientConfig:        config.ClientConfig,
+		MountPoint:          config.MountPoint,
 		SyncServerAddresses: config.SyncServerAddresses,
 	})
 }

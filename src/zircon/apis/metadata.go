@@ -49,12 +49,15 @@ type MetadataCache interface {
 	// Allocate a new metadata entry and corresponding chunk number
 	NewEntry() (ChunkNum, error)
 	// Reads the metadata entry of a particular chunk.
-	// If another server holds the lease on the metametadata the entry belongs to, returns it's name
+	// If another server holds the lease on the metametadata the entry belongs to, returns its name
 	ReadEntry(chunk ChunkNum) (MetadataEntry, ServerName, error)
+	// Read all the metadata entries of a particular metadata block
+	// If another server holds the lease on the metametadata the entry belongs to, returns its name
+	ReadAllEntries()
 	// Update the metadate entry of a particular chunk.
-	// If another server holds the lease on the metametadata the entry belongs to, returns it's name
+	// If another server holds the lease on the metametadata the entry belongs to, returns its name
 	UpdateEntry(chunk ChunkNum, previousEntry MetadataEntry, newEntry MetadataEntry) (ServerName, error)
 	// Delete a metadata entry and allow the garbage collection of the underlying chunks
-	// If another server holds the lease on the metametadata the entry belongs to, returns it's name
+	// If another server holds the lease on the metametadata the entry belongs to, returns its name
 	DeleteEntry(chunk ChunkNum, previousEntry MetadataEntry) (ServerName, error)
 }

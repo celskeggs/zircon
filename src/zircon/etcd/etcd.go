@@ -19,7 +19,7 @@ type etcdinterface struct {
 	Client    *clientv3.Client
 
 	LeaseMutex sync.Mutex
-	Lease      clientv3.LeaseID    // TODO: ensure that Lease is still the same after each transaction
+	Lease      clientv3.LeaseID // TODO: ensure that Lease is still the same after each transaction
 }
 
 // Connects to etcd and provides our specific etcd interface based on that connection.
@@ -293,6 +293,18 @@ func (e *etcdinterface) TryClaimingMetadata(blockid apis.MetadataID) (apis.Serve
 		}
 		return apis.ServerName(kv.Value), nil
 	}
+}
+
+// Lists the MetadataIDs of every metadata block that exists
+func (e *etcdinterface) ListAllMetametadata() ([]MetadataID, error) {
+	start := "/metadata/"
+	end := "/metadata0" // because '0' is the character directly after '/'
+	resp, err := e.Client.Get(context.Background(), start, clientv3.WithRange(end), clientv3.WithKeysOnly())
+	if err != nil {
+		return 0, err
+	}
+
+	return resp.Kvs, nil
 }
 
 // Try claiming some block of metametadata that is available and report how many remaining blocks are available to be leased
