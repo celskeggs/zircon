@@ -34,7 +34,10 @@ func errorToFuseStatus(err error) fuse.Status {
 	if err == nil {
 		return fuse.OK
 	}
-	log.Printf("NOTE: providing default EIO result for error %v\n", err)
+	if err.Error() == "no such file" {
+		return fuse.ENOENT
+	}
+	log.Printf("NOTE: providing default EIO result for error \"%v\"\n", err)
 	return fuse.EIO
 }
 
@@ -45,20 +48,20 @@ func errorToFuseStatus(err error) fuse.Status {
 	// return consistent non-zero FileInfo.Ino data.  Using
 	// hardlinks incurs a performance hit.
 func (f *fuseFS) GetAttr(name string, context *fuse.Context) (*fuse.Attr, fuse.Status) {
-	finfo, err := f.fs.Stat(name)
+	finfo, err := f.fs.Stat("/" + name)
 	if err != nil {
 		return nil, errorToFuseStatus(err)
 	}
 	var links uint32 = 1
 	if finfo.IsDir() {
 		// TODO: don't do all of this just for a link count
-		entries, err := f.fs.ListDir(name)
+		entries, err := f.fs.ListDir("/" + name)
 		if err != nil {
 			return nil, errorToFuseStatus(err)
 		}
 		links++
 		for _, ent := range entries {
-			s, err := f.fs.Stat(path.Join(name, ent))
+			s, err := f.fs.Stat(path.Join("/" + name, ent))
 			if err != nil {
 				return nil, errorToFuseStatus(err)
 			}
@@ -85,24 +88,24 @@ func (f *fuseFS) Truncate(name string, size uint64, context *fuse.Context) (code
 	if size > 0xFFFFFFFF {
 		return fuse.ERANGE
 	}
-	return errorToFuseStatus(f.fs.Truncate(name, uint32(size)))
+	return errorToFuseStatus(f.fs.Truncate("/" + name, uint32(size)))
 }
 
 	// Tree structure
 func (f *fuseFS) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
-	return errorToFuseStatus(f.fs.Mkdir(name))
+	return errorToFuseStatus(f.fs.Mkdir("/" + name))
 }
 
 func (f *fuseFS) Rename(oldName string, newName string, context *fuse.Context) (code fuse.Status) {
-	return errorToFuseStatus(f.fs.Rename(oldName, newName))
+	return errorToFuseStatus(f.fs.Rename("/" + oldName, "/" + newName))
 }
 
 func (f *fuseFS) Rmdir(name string, context *fuse.Context) (code fuse.Status) {
-	return errorToFuseStatus(f.fs.Rmdir(name))
+	return errorToFuseStatus(f.fs.Rmdir("/" + name))
 }
 
 func (f *fuseFS) Unlink(name string, context *fuse.Context) (code fuse.Status) {
-	return errorToFuseStatus(f.fs.Unlink(name))
+	return errorToFuseStatus(f.fs.Unlink("/" + name))
 }
 
 	// Called after mount.
@@ -117,15 +120,10 @@ func (f *fuseFS) OnUnmount() {
 	// File handling.  If opening for writing, the file's mtime
 	// should be updated too.
 func (f *fuseFS) Open(name string, flags uint32, context *fuse.Context) (nodefs.File, fuse.Status) {
-	if (int(flags) & os.O_APPEND) != 0 {
-
-	}
-	if (int(flags) & os.O_CREATE) != 0 {
-
-	}
+	create := (int(flags) & os.O_CREATE) != 0
 	exclusive := (int(flags) & os.O_EXCL) != 0
 	if (int(flags) & os.O_TRUNC) != 0 {
-
+		// TODO: needed?
 	}
 	if (int(flags) & (os.O_WRONLY | os.O_RDWR)) == (os.O_WRONLY | os.O_RDWR) {
 		return nil, fuse.EINVAL
@@ -134,16 +132,19 @@ func (f *fuseFS) Open(name string, flags uint32, context *fuse.Context) (nodefs.
 	var file filesystem.WritableFile
 	var err error
 	if writable {
-		file, err = f.fs.OpenWrite(name, exclusive)
+		file, err = f.fs.OpenWrite("/" + name, create, exclusive)
 		if err != nil {
 			return nil, errorToFuseStatus(err)
 		}
 	} else {
-		subfile, err := f.fs.OpenRead(name)
+		subfile, err := f.fs.OpenRead("/" + name)
 		if err != nil {
 			return nil, errorToFuseStatus(err)
 		}
 		file = filesystem.WithErroringWrite(subfile)
+	}
+	if (int(flags) & os.O_APPEND) != 0 {
+		// TODO: needed?
 	}
 	return &fuseFile{
 		base: file,
@@ -151,12 +152,12 @@ func (f *fuseFS) Open(name string, flags uint32, context *fuse.Context) (nodefs.
 }
 
 func (f *fuseFS) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
-	return f.Open(name, flags | uint32(os.O_CREATE) | uint32(os.O_TRUNC) | uint32(os.O_WRONLY), context)
+	return f.Open("/" + name, flags | uint32(os.O_CREATE) | uint32(os.O_TRUNC) | uint32(os.O_WRONLY), context)
 }
 
 	// Directory handling
 func (f *fuseFS) OpenDir(name string, context *fuse.Context) (stream []fuse.DirEntry, code fuse.Status) {
-	names, err := f.fs.ListDir(name)
+	names, err := f.fs.ListDir("/" + name)
 	if err != nil {
 		return nil, errorToFuseStatus(err)
 	}
@@ -172,11 +173,11 @@ func (f *fuseFS) OpenDir(name string, context *fuse.Context) (stream []fuse.DirE
 
 	// Symlinks.
 func (f *fuseFS) Symlink(value string, linkName string, context *fuse.Context) (code fuse.Status) {
-	return errorToFuseStatus(f.fs.SymLink(linkName, value))
+	return errorToFuseStatus(f.fs.SymLink("/" + linkName, value))
 }
 
 func (f *fuseFS) Readlink(name string, context *fuse.Context) (string, fuse.Status) {
-	link, err := f.fs.ReadLink(name)
+	link, err := f.fs.ReadLink("/" + name)
 	if err != nil {
 		return "", errorToFuseStatus(err)
 	}

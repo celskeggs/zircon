@@ -119,7 +119,11 @@ func (f fsFileInfo) Size() int64 {
 }
 
 func (f fsFileInfo) Mode() os.FileMode {
-	return os.FileMode(0755)
+	if f.isdir {
+		return os.FileMode(0040755)
+	} else {
+		return os.FileMode(0100755)
+	}
 }
 
 func (f fsFileInfo) ModTime() time.Time {
@@ -140,9 +144,14 @@ func (f *filesystem) Stat(path string) (os.FileInfo, error) {
 		return nil, err
 	}
 	defer ref.Release()
-	ntype, err := ref.Stat(path2.Base(path))
-	if err != nil {
-		return nil, err
+	var ntype NodeType
+	if path == "/" {
+		ntype = DIRECTORY
+	} else {
+		ntype, err = ref.Stat(path2.Base(path))
+		if err != nil {
+			return nil, err
+		}
 	}
 	switch ntype {
 	case NONEXISTENT:
@@ -163,11 +172,17 @@ func (f *filesystem) Stat(path string) (os.FileInfo, error) {
 			size: int64(size),
 		}, nil
 	case DIRECTORY:
-		f, err := ref.LookupDir(path2.Base(path))
+		var r *Reference
+		if path == "/" {
+			r, err = f.t.Root()
+		} else {
+			r, err = ref.LookupDir(path2.Base(path))
+		}
 		if err != nil {
 			return nil, err
 		}
-		entries, _, err := f.listEntries()
+		defer r.Release()
+		entries, _, err := r.listEntries()
 		if err != nil {
 			return nil, err
 		}
@@ -251,7 +266,7 @@ func (f *filesystem) OpenRead(path string) (ReadOnlyFile, error) {
 }
 
 // NOTE: closing file results is INCREDIBLY IMPORTANT
-func (f *filesystem) OpenWrite(path string, exclusive bool) (WritableFile, error) {
+func (f *filesystem) OpenWrite(path string, create bool, exclusive bool) (WritableFile, error) {
 	ref, err := f.t.PathDir(path2.Dir(path))
 	if err != nil {
 		return nil, err
@@ -259,6 +274,9 @@ func (f *filesystem) OpenWrite(path string, exclusive bool) (WritableFile, error
 	defer ref.Release()
 	var file *File
 	if exclusive {
+		if !create {
+			return nil, errors.New("mismatched exclusive/create options")
+		}
 		err := ref.NewFile(path2.Base(path))
 		if err != nil {
 			return nil, err
@@ -270,13 +288,17 @@ func (f *filesystem) OpenWrite(path string, exclusive bool) (WritableFile, error
 	} else {
 		file, err = ref.LookupFile(path2.Base(path))
 		if err != nil {
-			err2 := ref.NewFile(path2.Base(path))
-			if err2 != nil {
-				return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
-			}
-			file, err2 = ref.LookupFile(path2.Base(path))
-			if err2 != nil {
-				return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
+			if create {
+				err2 := ref.NewFile(path2.Base(path))
+				if err2 != nil {
+					return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
+				}
+				file, err2 = ref.LookupFile(path2.Base(path))
+				if err2 != nil {
+					return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
+				}
+			} else {
+				return nil, err
 			}
 		}
 	}

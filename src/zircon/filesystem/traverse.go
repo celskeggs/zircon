@@ -74,8 +74,8 @@ func splitPathMany(path string) []string {
 }
 
 func (t Traverser) PathDir(path string) (*Reference, error) {
-	if path[0] != '/' {
-		return nil, errors.New("path is not absolute!")
+	if path == "" || path[0] != '/' {
+		return nil, fmt.Errorf("path is not absolute: '%s'", path)
 	}
 	// TODO: traverse symlinks
 	directory, err := t.Root()
@@ -201,7 +201,7 @@ func (r *Reference) lookupEntryAny(name string) (Entry, int, apis.Version, error
 	}
 	for index, entry := range entries {
 		if entry.Name == name {
-			return entry, index, 0, nil
+			return entry, index, ver, nil
 		}
 	}
 	return Entry{}, 0, ver, fmt.Errorf("no such node: %s", name)
@@ -465,7 +465,7 @@ func (r *Reference) Remove(name string, rmdir bool) error {
 		if rmdir {
 			return errors.New("attempt to remove non-directory")
 		}
-		unlocker, err := r.t.fs.WriteLockChunk(r.chunk)
+		unlocker, err := r.t.fs.WriteLockChunk(entry.Chunk)
 		if err != nil {
 			return err
 		}

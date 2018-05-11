@@ -368,7 +368,26 @@ func (e *etcdinterface) UpgradeSync(s apis.SyncID) (apis.SyncID, error) {
 		}
 	})
 	if err != nil {
-		panic("needs to drop elevation here") // TODO
+		// ensure our elevation has been dropped
+		for {
+			// now we fetch the current status
+			sl, err2 := decodeLockLookup(e.Client, chunk)
+			if err2 != nil {
+				return 0, fmt.Errorf("encountered %v while cleaning up after %v", err2, err)
+			}
+			if !sl.IsElevating() || sl.Writer != s {
+				break
+			}
+			success, err2 := rewriteSyncState(e.Client, chunk, sl, sl.WithoutWriter(s))
+			if err2 != nil {
+				return 0, fmt.Errorf("encountered %v while cleaning up after %v", err2, err)
+			}
+			if success {
+				// we were removed successfully!
+				break
+			}
+			// not removed due to conflict; let's go around again
+		}
 		return 0, err
 	}
 	return newsync, nil

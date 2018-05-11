@@ -203,7 +203,7 @@ func TestSyncServer_DualEscalateFail(t *testing.T) {
 	_, err = etcd.UpgradeSync(sy2)
 	assert.Error(t, err) // because one of the upgrades should be blocked for the sake of not deadlocking
 
-	time.Sleep(time.Millisecond * 50)
+	time.Sleep(time.Millisecond * 100)
 
 	beginRelease := time.Now()
 	err = etcd.ReleaseSync(sy2)
@@ -214,5 +214,5 @@ func TestSyncServer_DualEscalateFail(t *testing.T) {
 
 	assert.True(t, beginRelease.Before(ipt), "relative: %v", ipt.Sub(beginRelease))
 	assert.True(t, endRelease.After(ipt))
-	assert.True(t, endRelease.Sub(beginRelease) < time.Millisecond * 30, "took too long: %v", endRelease.Sub(beginRelease))
+	assert.True(t, endRelease.Sub(beginRelease) < time.Millisecond * 60, "took too long: %v", endRelease.Sub(beginRelease))
 }

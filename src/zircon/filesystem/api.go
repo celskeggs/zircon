@@ -11,7 +11,7 @@ type Filesystem interface {
 	Rmdir(path string) error
 	OpenRead(path string) (ReadOnlyFile, error)
 	// Note: this does *NOT* truncate by default!
-	OpenWrite(path string, exclusive bool) (WritableFile, error)
+	OpenWrite(path string, create bool, exclusive bool) (WritableFile, error)
 	SymLink(source string, dest string) error
 	Stat(path string) (os.FileInfo, error)
 	ReadLink(path string) (string, error)

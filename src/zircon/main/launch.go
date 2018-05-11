@@ -17,19 +17,20 @@ import (
 	"zircon/metadatacache"
 	"zircon/filesystem/syncserver"
 	"zircon/filesystem/fuse"
+	"log"
 )
 
 type Config struct {
-	ServerName apis.ServerName
+	ServerName apis.ServerName `yaml:"server-name"`
 	Address     apis.ServerAddress
 
-	StorageType string
-	StoragePath string
+	StorageType string `yaml:"storage-type"`
+	StoragePath string `yaml:"storage-path"`
 
-	EtcdServers         []apis.ServerAddress
-	ClientConfig        client.Configuration
+	EtcdServers         []apis.ServerAddress `yaml:"etcd-servers"`
+	ClientConfig        client.Configuration `yaml:"client-config"`
 	MountPoint          string
-	SyncServerAddresses []apis.ServerAddress
+	SyncServerAddresses []apis.ServerAddress `yaml:"sync-servers"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -65,6 +66,8 @@ func LaunchChunkserver(config *Config) error {
 	conncache := rpc.NewConnectionCache()
 	defer conncache.CloseAll()
 
+	log.Printf("beginning chunkserver launch for %s\n", config.ServerName)
+
 	store, err := ConfigureChunkserverStorage(config)
 	if err != nil {
 		return err
@@ -82,6 +85,8 @@ func LaunchChunkserver(config *Config) error {
 		return err
 	}
 
+	log.Printf("subscribing to etcd for %s\n", config.ServerName)
+
 	cli, err := etcd.SubscribeEtcd(config.ServerName, config.EtcdServers)
 	if err != nil {
 		return err
@@ -92,10 +97,14 @@ func LaunchChunkserver(config *Config) error {
 		return err
 	}
 
+	log.Printf("finalizing launch for %s\n", config.ServerName)
+
 	err = cli.UpdateAddress(address, apis.CHUNKSERVER)
 	if err != nil {
 		return err
 	}
+
+	log.Printf("launched chunkserver %s at address %s (backing store %s)\n", cli.GetName(), address, config.StorageType)
 
 	return finish(false) // wait for server to finish
 }
@@ -103,6 +112,8 @@ func LaunchChunkserver(config *Config) error {
 func LaunchFrontend(config *Config) error {
 	conncache := rpc.NewConnectionCache()
 	defer conncache.CloseAll()
+
+	log.Printf("subscribing to etcd for %s\n", config.ServerName)
 
 	cli, err := etcd.SubscribeEtcd(config.ServerName, config.EtcdServers)
 	if err != nil {
@@ -124,12 +135,16 @@ func LaunchFrontend(config *Config) error {
 		return err
 	}
 
+	log.Printf("launched frontend %s at address %s\n", cli.GetName(), address)
+
 	return finish(false) // wait for server to finish
 }
 
 func LaunchMetadataCache(config *Config) error {
 	conncache := rpc.NewConnectionCache()
 	defer conncache.CloseAll()
+
+	log.Printf("subscribing to etcd for %s\n", config.ServerName)
 
 	cli, err := etcd.SubscribeEtcd(config.ServerName, config.EtcdServers)
 	if err != nil {
@@ -151,12 +166,16 @@ func LaunchMetadataCache(config *Config) error {
 		return err
 	}
 
+	log.Printf("launched metadata cache %s at address %s\n", cli.GetName(), address)
+
 	return finish(false) // wait for server to finish
 }
 
 func LaunchSyncServer(config *Config) error {
 	conncache := rpc.NewConnectionCache()
 	defer conncache.CloseAll()
+
+	log.Printf("subscribing to etcd for %s\n", config.ServerName)
 
 	cli, err := etcd.SubscribeEtcd(config.ServerName, config.EtcdServers)
 	if err != nil {
@@ -170,15 +189,19 @@ func LaunchSyncServer(config *Config) error {
 
 	ss := syncserver.NewSyncServer(cli, blkclient)
 
-	finish, _, err := rpc.PublishSyncServer(ss, config.Address)
+	finish, address, err := rpc.PublishSyncServer(ss, config.Address)
 	if err != nil {
 		return err
 	}
+
+	log.Printf("launched sync server %s at address %s\n", cli.GetName(), address)
 
 	return finish(false) // wait for server to finish
 }
 
 func LaunchFuse(config *Config) error {
+	log.Printf("launching fuse mounter...\n")
+
 	return fuse.MountFuse(filesystem.Configuration{
 		ClientConfig: config.ClientConfig,
 		MountPoint: config.MountPoint,

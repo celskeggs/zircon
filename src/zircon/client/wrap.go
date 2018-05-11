@@ -10,7 +10,7 @@ import (
 
 // The configuration information provided by a client application to connect to a Zircon cluster.
 type Configuration struct {
-	FrontendAddresses []apis.ServerAddress
+	FrontendAddresses []apis.ServerAddress `yaml:"frontend-addresses"`
 }
 
 // Set up all portions of a client based on a Zircon configuration.

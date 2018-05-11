@@ -13,10 +13,13 @@ func MountFuse(config filesystem.Configuration) error {
 		return err
 	}
 
-	pathFs := pathfs.NewPathNodeFs(NewFuseFS(fs), nil)
+	pathFs := pathfs.NewPathNodeFs(NewFuseFS(fs), &pathfs.PathNodeFsOptions{
+		Debug: true,
+	})
 	server, _, err := nodefs.MountRoot(config.MountPoint, pathFs.Root(), &nodefs.Options{
 		AttrTimeout: time.Second * 10,
 		EntryTimeout: time.Second * 10,
+		Debug: true,
 	})
 	if err != nil {
 		return err

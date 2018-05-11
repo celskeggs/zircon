@@ -56,7 +56,7 @@ func NewConnectionCache() ConnectionCache {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 	client := &http.Client{
-		Timeout:   time.Second,
+		Timeout:   30 * time.Second,
 		Transport: transport,
 	}
 	return &conncache{
