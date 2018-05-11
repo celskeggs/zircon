@@ -5,6 +5,11 @@ import (
 	"zircon/rpc"
 )
 
+// TODO This whole thing
 func RecoveryService(etcd apis.EtcdInterface, localCache apis.MetadataCache, rpcCache rpc.ConnectionCache) (cancel func() error, err error) {
-	panic("unimplemented")
+	cancel = func() error {
+		return nil
+	}
+
+	return cancel, nil
 }

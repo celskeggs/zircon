@@ -2,10 +2,15 @@ package client
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"zircon/apis"
+	"zircon/chunkserver"
+	"zircon/etcd"
+	"zircon/frontend"
+	"zircon/metadatacache"
+	"zircon/rpc"
 	"zircon/util"
-	"github.com/stretchr/testify/require"
 )
 
 // NOTE: Only simple tests are provided here. Everything else should either go into control/client_test.go or should be

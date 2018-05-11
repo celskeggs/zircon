@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"time"
 	"zircon/apis"
 	"zircon/chunkupdate"
 	"zircon/metadatacache"
@@ -11,18 +12,55 @@ import (
 
 const MinReplicas int = 2
 
+// Replicaiton Frequency in seconds
+const ReplicationFreq = 5
+
 // Explanation of the replication service:
 //     Every chunk in the cluster should be replicated to at least two servers, preferably three.
 //     The replication service goes through, counts valid replicas, and replicates new ones as necessary.
 //         (TODO: have chunkservers periodically check their disk checksums)
 func ReplicatorService(etcd apis.EtcdInterface, localCache apis.MetadataCache, rpcCache rpc.ConnectionCache) (cancel func() error, err error) {
-	return nil, nil
+	rpl := replicator{
+		etcd:       etcd,
+		localCache: localCache,
+		rpcCache:   rpcCache,
+	}
+
+	cancel = func() error {
+		rpl.Stop()
+		return nil
+	}
+
+	err = rpl.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return cancel, nil
 }
 
 type replicator struct {
 	etcd       apis.EtcdInterface
 	localCache apis.MetadataCache
 	rpcCache   rpc.ConnectionCache
+	stop       bool
+}
+
+func (rpl *replicator) Start() error {
+	go func() {
+		for !rpl.stop {
+			rpl.replicate()
+
+			time.Sleep(ReplicationFreq * time.Second)
+		}
+	}()
+
+	return nil
+}
+
+func (rpl *replicator) Stop() error {
+	rpl.stop = true
+	return nil
 }
 
 func (rpl *replicator) replicate() error {
