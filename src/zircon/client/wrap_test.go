@@ -5,11 +5,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"testing"
 	"zircon/apis"
-	"zircon/chunkserver"
-	"zircon/etcd"
-	"zircon/frontend"
-	"zircon/metadatacache"
-	"zircon/rpc"
 	"zircon/util"
 )
 

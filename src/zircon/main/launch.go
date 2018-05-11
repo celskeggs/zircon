@@ -18,7 +18,6 @@ import (
 	"zircon/frontend"
 	"zircon/metadatacache"
 	"zircon/rpc"
-	"zircon/services"
 )
 
 type Config struct {
