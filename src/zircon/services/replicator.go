@@ -49,7 +49,10 @@ type replicator struct {
 func (rpl *replicator) Start() error {
 	go func() {
 		for !rpl.stop {
-			rpl.replicate()
+			err := rpl.replicate()
+			if err != nil {
+				log.Printf("Error replicating: %v", err)
+			}
 
 			time.Sleep(ReplicationFreq * time.Second)
 		}
