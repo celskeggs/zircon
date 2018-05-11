@@ -5,6 +5,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse"
 	"io"
+	"time"
 )
 
 type fuseFile struct {

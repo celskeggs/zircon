@@ -12,7 +12,6 @@ import (
 	"zircon/client/demo"
 	"zircon/rpc"
 	"zircon/filesystem"
-	"github.com/coreos/etcd/clientv3"
 	"zircon/etcd"
 	"zircon/frontend"
 	"zircon/metadatacache"

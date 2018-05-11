@@ -303,7 +303,7 @@ type WritableFile interface {
 	io.WriterAt
 	io.Seeker
 	io.Closer
-	Truncate(int64) error
+	Truncate(uint64) error
 }
 
 type erroringWriter struct {
@@ -330,7 +330,7 @@ func (f erroringWriter) WriteAt(p []byte, off int64) (n int, err error) {
 	return 0, errors.New("not a writable file")
 }
 
-func (f erroringWriter) Truncate(len int64) error {
+func (f erroringWriter) Truncate(len uint64) error {
 	return errors.New("not a writable file")
 }
 
@@ -428,7 +428,7 @@ func (f *fileStream) Seek(offset int64, whence int) (int64, error) {
 	return int64(nhead), nil
 }
 
-func (f *fileStream) Truncate(len int64) error {
+func (f *fileStream) Truncate(len uint64) error {
 	// TODO: handle overflow
 	return f.f.Truncate(uint32(len))
 }
