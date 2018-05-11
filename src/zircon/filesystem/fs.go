@@ -18,6 +18,7 @@ type filesystem struct {
 }
 
 type Configuration struct {
+	MountPoint          string
 	ClientConfig        client.Configuration
 	SyncServerAddresses []apis.ServerAddress
 }
@@ -234,7 +235,7 @@ func (f *filesystem) Truncate(path string, length uint32) error {
 	return file.Truncate(length)
 }
 
-func (f *filesystem) OpenRead(path string) (ReadSeekCloser, error) {
+func (f *filesystem) OpenRead(path string) (ReadOnlyFile, error) {
 	ref, err := f.t.PathDir(path2.Dir(path))
 	if err != nil {
 		return nil, err
@@ -250,21 +251,33 @@ func (f *filesystem) OpenRead(path string) (ReadSeekCloser, error) {
 }
 
 // NOTE: closing file results is INCREDIBLY IMPORTANT
-func (f *filesystem) OpenWrite(path string) (ReadWriteSeekCloser, error) {
+func (f *filesystem) OpenWrite(path string, exclusive bool) (WritableFile, error) {
 	ref, err := f.t.PathDir(path2.Dir(path))
 	if err != nil {
 		return nil, err
 	}
 	defer ref.Release()
-	file, err := ref.LookupFile(path2.Base(path))
-	if err != nil {
-		err2 := ref.NewFile(path2.Base(path))
-		if err2 != nil {
-			return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
+	var file *File
+	if exclusive {
+		err := ref.NewFile(path2.Base(path))
+		if err != nil {
+			return nil, err
 		}
-		file, err2 = ref.LookupFile(path2.Base(path))
-		if err2 != nil {
-			return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
+		file, err = ref.LookupFile(path2.Base(path))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		file, err = ref.LookupFile(path2.Base(path))
+		if err != nil {
+			err2 := ref.NewFile(path2.Base(path))
+			if err2 != nil {
+				return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
+			}
+			file, err2 = ref.LookupFile(path2.Base(path))
+			if err2 != nil {
+				return nil, fmt.Errorf("two errors: %v -- and -- %v", err, err2)
+			}
 		}
 	}
 	return &fileStream{
@@ -272,17 +285,61 @@ func (f *filesystem) OpenWrite(path string) (ReadWriteSeekCloser, error) {
 	}, nil
 }
 
-type ReadSeekCloser interface {
+func (f *filesystem) GetTraverser() (*Traverser, error) {
+	return f.t, nil
+}
+
+type ReadOnlyFile interface {
 	io.Reader
+	io.ReaderAt
 	io.Seeker
 	io.Closer
 }
 
-type ReadWriteSeekCloser interface {
+type WritableFile interface {
 	io.Reader
+	io.ReaderAt
 	io.Writer
+	io.WriterAt
 	io.Seeker
 	io.Closer
+	Truncate(int64) error
+}
+
+type erroringWriter struct {
+	base ReadOnlyFile
+}
+
+func WithErroringWrite(i ReadOnlyFile) WritableFile {
+	return erroringWriter{i}
+}
+
+func (f erroringWriter) Read(p []byte) (n int, err error) {
+	return f.base.Read(p)
+}
+
+func (f erroringWriter) ReadAt(p []byte, off int64) (n int, err error) {
+	return f.base.ReadAt(p, off)
+}
+
+func (f erroringWriter) Write(p []byte) (n int, err error) {
+	return 0, errors.New("not a writable file")
+}
+
+func (f erroringWriter) WriteAt(p []byte, off int64) (n int, err error) {
+	return 0, errors.New("not a writable file")
+}
+
+func (f erroringWriter) Truncate(len int64) error {
+	return errors.New("not a writable file")
+}
+
+func (f erroringWriter) Seek(offset int64, whence int) (int64, error) {
+	return f.base.Seek(offset, whence)
+}
+
+func (f erroringWriter) Close() error {
+	return f.base.Close()
 }
 
 type fileStream struct {
@@ -290,6 +347,8 @@ type fileStream struct {
 	closed bool
 	head   uint32
 }
+
+var _ WritableFile = &fileStream{}
 
 func (f *fileStream) Read(p []byte) (n int, err error) {
 	if f.closed {
@@ -307,6 +366,23 @@ func (f *fileStream) Read(p []byte) (n int, err error) {
 	return len(data), nil
 }
 
+func (f *fileStream) ReadAt(p []byte, off int64) (n int, err error) {
+	if f.closed {
+		return 0, errors.New("file already closed")
+	}
+	// TODO: overflow checks
+	data, err := f.f.Read(uint32(off), uint32(len(p)))
+	if err != nil {
+		return 0, err
+	}
+	copy(p, data)
+	if len(data) < len(p) {
+		return len(data), io.EOF
+	} else {
+		return len(data), nil
+	}
+}
+
 func (f *fileStream) Write(p []byte) (n int, err error) {
 	if f.closed {
 		return 0, errors.New("file already closed")
@@ -316,6 +392,18 @@ func (f *fileStream) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 	f.head += uint32(len(p))
+	return len(p), nil
+}
+
+func (f *fileStream) WriteAt(p []byte, off int64) (n int, err error) {
+	if f.closed {
+		return 0, errors.New("file already closed")
+	}
+	// TODO: overflow checks
+	err = f.f.Write(uint32(off), p)
+	if err != nil {
+		return 0, err
+	}
 	return len(p), nil
 }
 
@@ -338,6 +426,11 @@ func (f *fileStream) Seek(offset int64, whence int) (int64, error) {
 	}
 	f.head = nhead
 	return int64(nhead), nil
+}
+
+func (f *fileStream) Truncate(len int64) error {
+	// TODO: handle overflow
+	return f.f.Truncate(uint32(len))
 }
 
 func (f *fileStream) Close() error {

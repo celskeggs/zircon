@@ -21,6 +21,7 @@ go get github.com/golang/protobuf/protoc-gen-go
 go get github.com/vektra/mockery/.../
 go get gopkg.in/yaml.v2
 go get github.com/coreos/etcd/clientv3
+go get github.com/hanwen/go-fuse/fuse
 
 export PATH="$GOPATH/bin:$(pwd)/protobuf/bin:$PATH"
 

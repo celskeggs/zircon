@@ -4,7 +4,7 @@ import (
 	"zircon/apis"
 	"encoding/binary"
 	"zircon/util"
-	"github.com/pkg/errors"
+	"errors"
 	"fmt"
 	path2 "path"
 )

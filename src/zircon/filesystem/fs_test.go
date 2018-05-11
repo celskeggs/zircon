@@ -60,7 +60,7 @@ func TestSimpleOperations(t *testing.T) {
 	_, err := fs.OpenRead("/tmp/test/log.txt")
 	assert.Error(t, err)
 
-	fileWrite, err := fs.OpenWrite("/tmp/test/log.txt")
+	fileWrite, err := fs.OpenWrite("/tmp/test/log.txt", false)
 	if assert.NoError(t, err) {
 		n, err := fileWrite.Write([]byte("hello, world!\n"))
 		assert.NoError(t, err)
