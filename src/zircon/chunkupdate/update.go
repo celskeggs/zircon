@@ -299,7 +299,7 @@ func (f *updater) Delete(chunk apis.ChunkNum, version apis.Version) error {
 		// then this chunk must be in the process of being deleted... don't let them delete it again!
 		return errors.New("attempt to delete chunk in the process of deletion")
 	}
-	if entry.MostRecentVersion != version {
+	if entry.MostRecentVersion != version && version != apis.AnyVersion {
 		return errors.New("version mismatch during delete; will not delete")
 	}
 	// First, we mark this as deleted

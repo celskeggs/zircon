@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 	"zircon/apis"
+	"encoding/binary"
 )
 
 type etcdinterface struct {
@@ -446,4 +447,57 @@ func (e *etcdinterface) UpdateMetametadata(blockid apis.MetadataID, previous api
 
 func (e *etcdinterface) Close() error {
 	return e.Client.Close()
+}
+
+// SyncServer-related code
+
+const FilesystemNextSyncKey = "/fs/nextsync"
+
+func encodeSync(id apis.SyncID) string {
+	bin := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bin, uint64(id))
+	return string(bin)
+}
+
+func encodeChunk(chunk apis.ChunkNum) string {
+	bin := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bin, uint64(chunk))
+	return string(bin)
+}
+
+func decodeChunk(c []byte) apis.ChunkNum {
+	return apis.ChunkNum(binary.LittleEndian.Uint64(c))
+}
+
+const NoSync apis.SyncID = 0
+
+func (e *etcdinterface) nextSyncID() (apis.SyncID, error) {
+	resp, err := e.Client.Get(context.Background(), FilesystemNextSyncKey)
+	if err != nil {
+		return 0, err
+	}
+	kvs := resp.Kvs
+	for {
+		var lastID apis.SyncID
+		txn := e.Client.Txn(context.Background())
+		if len(kvs) != 0 {
+			lastID = apis.SyncID(binary.LittleEndian.Uint64(kvs[0].Value))
+			txn = txn.If(clientv3.Compare(clientv3.Value(FilesystemNextSyncKey), "=", string(kvs[0].Value)))
+		} else {
+			txn = txn.If(clientv3.Compare(clientv3.CreateRevision(FilesystemNextSyncKey), "=", 0))
+		}
+		lastID += 1
+		tresp, err := txn.
+			Then(clientv3.OpPut(FilesystemNextSyncKey, encodeSync(lastID))).
+			Else(clientv3.OpGet(FilesystemNextSyncKey)).
+			Commit()
+		if err != nil {
+			return 0, err
+		}
+		if tresp.Succeeded {
+			return lastID, nil
+		}
+		kvs = tresp.Responses[0].GetResponseRange().Kvs
+		// try again!
+	}
 }
