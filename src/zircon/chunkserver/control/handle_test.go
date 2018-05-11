@@ -83,10 +83,7 @@ func TestChunkserverSingle(t *testing.T) {
 
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
-		assert.Equal([]struct {
-			Chunk   apis.ChunkNum
-			Version apis.Version
-		}{
+		assert.Equal([]apis.ChunkVersion{
 			{7, 3},
 		}, chunks)
 
@@ -121,10 +118,7 @@ func TestChunkserverSingle(t *testing.T) {
 
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
-		assert.Equal([]struct {
-			Chunk   apis.ChunkNum
-			Version apis.Version
-		}{
+		assert.Equal([]apis.ChunkVersion{
 			{7, 3},
 		}, chunks)
 
@@ -141,10 +135,7 @@ func TestChunkserverSingle(t *testing.T) {
 
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
-		assert.Equal([]struct {
-			Chunk   apis.ChunkNum
-			Version apis.Version
-		}{
+		assert.Equal([]apis.ChunkVersion{
 			{7, 3},
 		}, chunks)
 	})
@@ -231,10 +222,7 @@ func TestChunkserverSingle(t *testing.T) {
 
 		chunks, err = cs.ListAllChunks()
 		assert.NoError(err)
-		assert.Equal([]struct {
-			Chunk   apis.ChunkNum
-			Version apis.Version
-		}{
+		assert.Equal([]apis.ChunkVersion{
 			{7, 4},
 		}, chunks)
 
@@ -292,10 +280,7 @@ func TestChunkserverSingle(t *testing.T) {
 
 		chunks, err = cs.ListAllChunks()
 		assert.NoError(err)
-		assert.Equal([]struct {
-			Chunk   apis.ChunkNum
-			Version apis.Version
-		}{
+		assert.Equal([]apis.ChunkVersion{
 			{7, 4},
 		}, chunks)
 
@@ -351,10 +336,7 @@ func TestChunkserverSingle(t *testing.T) {
 
 		chunks, err := cs.ListAllChunks()
 		assert.NoError(err)
-		assert.Equal([]struct {
-			Chunk   apis.ChunkNum
-			Version apis.Version
-		}{
+		assert.Equal([]apis.ChunkVersion{
 			{7, 3},
 		}, chunks)
 	})

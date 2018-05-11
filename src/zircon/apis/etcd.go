@@ -47,7 +47,7 @@ type EtcdInterface interface {
 	// Claim some unclaimed metametablock. If everything that exists is claimed, return 0 and no error.
 	LeaseAnyMetametadata() (MetadataID, error)
 	// Lists the MetadataIDs of every metadata block that exists
-	ListAllMetametadata() ([]MetadataID, error)
+	ListAllMetaIDs() ([]MetadataID, error)
 	// Renew the claim on all metadata blocks
 	RenewMetadataClaims() error
 

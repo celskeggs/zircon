@@ -51,9 +51,6 @@ type MetadataCache interface {
 	// Reads the metadata entry of a particular chunk.
 	// If another server holds the lease on the metametadata the entry belongs to, returns its name
 	ReadEntry(chunk ChunkNum) (MetadataEntry, ServerName, error)
-	// Read all the metadata entries of a particular metadata block
-	// If another server holds the lease on the metametadata the entry belongs to, returns its name
-	ReadAllEntries()
 	// Update the metadate entry of a particular chunk.
 	// If another server holds the lease on the metametadata the entry belongs to, returns its name
 	UpdateEntry(chunk ChunkNum, previousEntry MetadataEntry, newEntry MetadataEntry) (ServerName, error)

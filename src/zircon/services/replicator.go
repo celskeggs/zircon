@@ -5,6 +5,7 @@ import (
 	"log"
 	"zircon/apis"
 	"zircon/chunkupdate"
+	"zircon/metadatacache"
 	"zircon/rpc"
 )
 
@@ -31,28 +32,36 @@ func (rpl *replicator) replicate() error {
 		return err
 	}
 
-	blockIDs, err := rpl.etcd.ListAllMetadataBlocks()
+	metachunks, err := rpl.etcd.ListAllMetaIDs()
 	if err != nil {
 		return err
 	}
 
-	for _, blockID := range blockIDs {
-		// Check for valid replicatioon of metadata chunks
-		// 1. Replace any chunk references that are not in our list of valid chunk references
-		// 2. Make sure that the replication of each chunk is at least minReplication
-		// 3. Replace chunk reference that somehow are not up-to-date with the current version
+	for _, metachunk := range metachunks {
+		// TODO This whole part. Poke cela about how metadata blocks are now done
 
-		// TODO This whole part. Poke cela about how metadata blocks are noew done
+		// Read all of the entries for this MetadataID
+		entries := make(map[apis.ChunkNum]apis.MetadataEntry)
+		owner := apis.NoRedirect
+		for i := 0; i < 1<<apis.EntriesPerBlock; i++ {
+			chunkID := metadatacache.EntryAndBlockToChunkNum(metachunk, uint32(i))
+			// TODO Make this distinguish between the entry just not being there and a critical err
+			entry, owner, err := rpl.localCache.ReadEntry(chunkID)
+			if owner != apis.NoRedirect {
+				log.Printf("Server %s has lease on metachunk %d. Skipping over it.", owner, metachunk)
+				break
+			}
+
+			if err == nil {
+				entries[chunkID] = entry
+			}
+		}
 
 		// Check for valid replication of data chunks
-		entries, owner, err := rpl.localCache.ReadAllEntries(blockID)
-		if err == nil {
-			rpl.replicateChunks(entries, validChunks)
-		} else if owner != apis.NoRedirect {
-			log.Printf("Server %s has lease on block %d. Skipping over it.", owner, blockID)
+		if owner != apis.NoRedirect {
 			continue
-		} else {
-			log.Printf("Cache threw error %v on block %d. Skipping over it.", err, blockID)
+		} else if len(entries) == 0 {
+			rpl.replicateChunks(entries, validChunks)
 		}
 	}
 
@@ -71,12 +80,14 @@ func (rpl *replicator) genValidChunks() (map[apis.ServerID]map[apis.ChunkVersion
 	// Map to chunk version, as a previous version of a chunk doesn't count for our replication goals
 	chunks := make(map[apis.ServerID]map[apis.ChunkVersion]bool)
 	for _, chunkserver := range chunkservers {
+		// TODO Make sure this times out if the target is down
 		cs, err := rpl.idToCS(chunkserver)
 		if err != nil {
 			log.Printf("Server %s threw error: %v while constructing list of valid chunks", chunkserver, err)
 			continue
 		}
 
+		// This assumes chunkserver to return only its valid chunks
 		cvs, err := cs.ListAllChunks()
 		if err != nil {
 			log.Printf("Server %s threw error: %v while constructing list of valid chunks", chunkserver, err)
@@ -95,6 +106,9 @@ func (rpl *replicator) genValidChunks() (map[apis.ServerID]map[apis.ChunkVersion
 
 // Given a list of entries and a list of valid ChunkVersions per chunkserver,
 // ensure than each chunk is replicated to an appropriate number of healthy servers
+// 1. Replace any chunk references that are not in our list of valid chunk references
+// 2. Make sure that the replication of each chunk is at least minReplication
+// 3. Replace chunk references that somehow are not up-to-date with the current version
 func (rpl *replicator) replicateChunks(entries map[apis.ChunkNum]apis.MetadataEntry, validChunks map[apis.ServerID]map[apis.ChunkVersion]bool) {
 	for chunk, entry := range entries {
 		// TODO Is this the right version to use?
@@ -210,6 +224,9 @@ func (rpl *replicator) replicateChunk(chunk apis.ChunkNum, entry apis.MetadataEn
 // Given a chunkserver id, return a connection to that chunkserver
 func (rpl *replicator) idToCS(id apis.ServerID) (apis.Chunkserver, error) {
 	addr, err := chunkupdate.AddressForChunkserver(rpl.etcd, id)
+	if err != nil {
+		return nil, err
+	}
 
 	return rpl.rpcCache.SubscribeChunkserver(addr)
 }
