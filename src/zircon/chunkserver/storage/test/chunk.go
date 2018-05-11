@@ -7,6 +7,7 @@ import (
 	"zircon/apis"
 	"zircon/chunkserver/storage"
 	"zircon/util"
+	"github.com/stretchr/testify/require"
 )
 
 func sortChunkNums(chunks []apis.ChunkNum) {
@@ -232,7 +233,7 @@ func TestChunkStorage(openStorage func() storage.ChunkStorage, closeStorage func
 
 		data, err := s.ReadVersion(70, 100)
 		assert.NoError(err)
-		assert.Equal(apis.MaxChunkSize, len(data))
+		require.Equal(t, apis.MaxChunkSize, len(data))
 		assert.Equal(uint8(152), data[len(data)-1])
 		data[len(data)-1] = 0
 		assert.Equal(uint8(152), write[len(write)-1])
