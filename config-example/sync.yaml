@@ -1,0 +1,7 @@
+server-name: synctest
+address: 127.0.0.2:1550
+etcd-servers:
+ - localhost:2379
+client-config:
+  frontend-addresses:
+    - 127.0.0.2:1500
