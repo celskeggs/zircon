@@ -1,0 +1,4 @@
+server-name: fronttest
+address: 127.0.0.2:0
+etcd-servers:
+ - localhost:2379

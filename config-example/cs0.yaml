@@ -1,0 +1,6 @@
+server-name: cs0
+address: 127.0.0.2:0
+storage-type: filesystem
+storage-path: data-cs0
+etcd-servers:
+ - localhost:2379
