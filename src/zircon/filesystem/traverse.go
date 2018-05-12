@@ -17,6 +17,9 @@ type Traverser struct {
 // Each of the following structures inherently includes a READ LOCK. You can assume the item itself will not change!
 // Relatedly, do not hold onto references to these for long periods of time.
 
+// Note: some of our model for this was based on analysis gleaned from
+//https://www.doc.ic.ac.uk/~pg/publications/Ntzik2017Reasoning.pdf, although we didn't consider most of that document.
+
 type Reference struct {
 	t        Traverser
 	chunk    apis.ChunkNum

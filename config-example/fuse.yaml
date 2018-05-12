@@ -5,4 +5,4 @@ client-config:
 sync-servers:
   - 127.0.0.2:1550
 
-mountpoint: /zircon0
+mountpoint: zircon0

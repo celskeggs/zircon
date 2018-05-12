@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const Debug = false
+
 func MountFuse(config filesystem.Configuration) error {
 	fs, err := filesystem.NewFilesystemClient(config)
 	if err != nil {
@@ -14,12 +16,12 @@ func MountFuse(config filesystem.Configuration) error {
 	}
 
 	pathFs := pathfs.NewPathNodeFs(NewFuseFS(fs), &pathfs.PathNodeFsOptions{
-		Debug: true,
+		Debug: Debug,
 	})
 	server, _, err := nodefs.MountRoot(config.MountPoint, pathFs.Root(), &nodefs.Options{
 		AttrTimeout: time.Second * 10,
 		EntryTimeout: time.Second * 10,
-		Debug: true,
+		Debug: Debug,
 	})
 	if err != nil {
 		return err
