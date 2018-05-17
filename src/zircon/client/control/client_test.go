@@ -15,6 +15,7 @@ import (
 	"zircon/rpc"
 	"zircon/util"
 	"zircon/metadatacache"
+	"log"
 )
 
 // Prepares three chunkservers (cs0-cs2) and one frontend server (fe0)
@@ -159,6 +160,10 @@ func TestMaxSizeChecking(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestReadRate(t *testing.T) {
+	// TODO
+}
+
 // Tests the ability for multiple clients to safely clobber each others' changes to a shared block of data.
 func TestConflictingClients(t *testing.T) {
 	cache, _, fe, teardown := PrepareLocalCluster(t)
@@ -245,6 +250,8 @@ func TestConflictingClients(t *testing.T) {
 	// should be able to process at least four contended requests per second on average
 	assert.True(t, finalCount >= 15, "not enough requests processed: %d/15", finalCount)
 
+	log.Printf("results of conflicting test: %d final\n", finalCount) // 28 baseline
+
 	checkSum := func() int {
 		teardownClient, err := ConstructClient(fe, cache)
 		assert.NoError(t, err)
@@ -328,10 +335,12 @@ func TestParallelClients(t *testing.T) {
 	ops := 0
 	for i := 0; i < count; i++ {
 		opsSingle := <-complete
-		assert.True(t, opsSingle >= 2, "not enough requests processed: %d/2", opsSingle)
+		assert.True(t, opsSingle >= 10, "not enough requests processed: %d/10", opsSingle)
 		ops += opsSingle
 	}
-	assert.True(t, ops >= 15, "not enough requests processed: %d/15", ops)
+	assert.True(t, ops >= 100, "not enough requests processed: %d/100", ops)
+
+	log.Printf("results of conflicting test: %d final\n", ops) // 28 baseline
 }
 
 // Tests the ability for deleted chunks to be fully cleaned up

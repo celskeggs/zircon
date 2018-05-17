@@ -5,16 +5,25 @@ import (
 	"zircon/chunkupdate"
 	"errors"
 	"fmt"
+	"sync"
 )
 
 type etcdMetadataUpdater struct {
-	etcd        apis.EtcdInterface
+	etcd             apis.EtcdInterface
+	newMutex         sync.Mutex
+	localAllocations map[apis.MetadataID]bool
 }
 
 var _ chunkupdate.UpdaterMetadata = &etcdMetadataUpdater{}
 
 func (r *etcdMetadataUpdater) NewEntry() (apis.ChunkNum, error) {
+	// lock required, so that we don't double-allocate something
+	r.newMutex.Lock()
+	defer r.newMutex.Unlock()
 	for i := apis.MinMetadataRange; i <= apis.MaxMetadataRange; i++ {
+		if r.localAllocations[i] {
+			continue
+		}
 		owner, err := r.etcd.TryClaimingMetadata(i)
 		if err != nil {
 			return 0, fmt.Errorf("while scanning claims for NewEntry: %v", err)
@@ -27,6 +36,7 @@ func (r *etcdMetadataUpdater) NewEntry() (apis.ChunkNum, error) {
 			return 0, fmt.Errorf("while scanning metametadata for NewEntry: %v", err)
 		}
 		if len(data.Replicas) == 0 && data.LastConsumedVersion == 0 && data.MostRecentVersion == 0 {
+			r.localAllocations[i] = true
 			return apis.ChunkNum(i), nil
 		}
 	}

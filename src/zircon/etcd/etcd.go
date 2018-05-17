@@ -433,7 +433,7 @@ func (e *etcdinterface) UpdateMetametadata(blockid apis.MetadataID, previous api
 	}
 
 	if !originalEntry.Equals(previous) {
-		return errors.New("cannot update metadata; mismatch on previous value")
+		return fmt.Errorf("cannot update metadata; mismatch on previous value: %v instead of %v", originalEntry, previous)
 	}
 
 	menc, err := json.Marshal(data)

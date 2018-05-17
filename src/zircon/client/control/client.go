@@ -1,7 +1,6 @@
 package control
 
 import (
-	"errors"
 	"zircon/apis"
 	"zircon/rpc"
 	"zircon/chunkupdate"
@@ -62,7 +61,7 @@ func (c *client) Write(ref apis.ChunkNum, offset uint32, version apis.Version, d
 		return 0, fmt.Errorf("given zero replicas when reading metadata entry")
 	}
 	if rversion != version {
-		return rversion, errors.New("version mismatch")
+		return rversion, fmt.Errorf("version mismatch: found %d instead of %d", rversion, version)
 	}
 	reference := &chunkupdate.Reference{
 		Chunk:    ref,

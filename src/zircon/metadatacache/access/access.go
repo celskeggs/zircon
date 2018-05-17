@@ -19,6 +19,7 @@ type Access struct {
 func ConstructAccess(etcd apis.EtcdInterface, cache rpc.ConnectionCache) (*Access, error) {
 	updater := chunkupdate.NewUpdater(cache, etcd, &etcdMetadataUpdater{
 		etcd: etcd,
+		localAllocations: make(map[apis.MetadataID]bool),
 	})
 	return &Access{
 		etcd: etcd,
