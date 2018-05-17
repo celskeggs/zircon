@@ -194,24 +194,24 @@ func (r *Reference) Stat(name string) (NodeType, error) {
 	return NONEXISTENT, nil
 }
 
-func (r *Reference) lookupEntryAny(name string) (Entry, int, apis.Version, error) {
+func (r *Reference) lookupEntryAny(name string) (Entry, apis.Version, error) {
 	if name == "" {
-		return Entry{}, 0, 0, errors.New("empty filename")
+		return Entry{}, 0, errors.New("empty filename")
 	}
 	entries, ver, err := r.listEntries()
 	if err != nil {
-		return Entry{}, 0, ver, err
+		return Entry{}, ver, err
 	}
-	for index, entry := range entries {
+	for _, entry := range entries {
 		if entry.Name == name {
-			return entry, index, ver, nil
+			return entry, ver, nil
 		}
 	}
-	return Entry{}, 0, ver, fmt.Errorf("no such node: %s", name)
+	return Entry{}, ver, fmt.Errorf("no such node: %s", name)
 }
 
 func (r *Reference) lookupEntry(name string, ntype NodeType) (Entry, error) {
-	entry, _, _, err := r.lookupEntryAny(name)
+	entry, _, err := r.lookupEntryAny(name)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -382,7 +382,7 @@ func (r *Reference) Rename(sourcename string, targetname string) error {
 	if sourcename == targetname {
 		return errors.New("attempt to rename file to itself!")
 	}
-	entryS, indexS, verS, err := r.lookupEntryAny(sourcename)
+	entryS, verS, err := r.lookupEntryAny(sourcename)
 	if err != nil {
 		return err
 	}
@@ -395,7 +395,7 @@ func (r *Reference) Rename(sourcename string, targetname string) error {
 		return err
 	}
 	defer elevated.Release()
-	verN, err := elevated.updateEntry(verS, indexS, Entry{ Type: NONEXISTENT })
+	verN, err := elevated.updateEntry(verS, entryS.Index, Entry{ Type: NONEXISTENT })
 	if err != nil {
 		return err
 	}
@@ -411,7 +411,7 @@ func (r *Reference) MoveTo(target *Reference, sourcename string, targetname stri
 	if r.chunk == target.chunk {
 		return r.Rename(sourcename, targetname)
 	}
-	entryS, indexS, verS, err := r.lookupEntryAny(sourcename)
+	entryS, verS, err := r.lookupEntryAny(sourcename)
 	if err != nil {
 		return err
 	}
@@ -425,7 +425,7 @@ func (r *Reference) MoveTo(target *Reference, sourcename string, targetname stri
 	}
 	defer elevSource.Release()
 	defer elevTarget.Release()
-	if _, err = elevSource.updateEntry(verS, indexS, Entry{ Type: NONEXISTENT }); err != nil {
+	if _, err = elevSource.updateEntry(verS, entryS.Index, Entry{ Type: NONEXISTENT }); err != nil {
 		return err
 	}
 	// TODO: this point contains a serious concurrency flaw: a race condition that can make a file disappear!
@@ -437,7 +437,7 @@ func (r *Reference) MoveTo(target *Reference, sourcename string, targetname stri
 }
 
 func (r *Reference) Remove(name string, rmdir bool) error {
-	entry, index, ver, err := r.lookupEntryAny(name)
+	entry, ver, err := r.lookupEntryAny(name)
 	if err != nil {
 		return err
 	}
@@ -479,7 +479,7 @@ func (r *Reference) Remove(name string, rmdir bool) error {
 		return err
 	}
 	defer elevated.Release()
-	if _, err = elevated.updateEntry(ver, index, Entry{Type: NONEXISTENT}); err != nil {
+	if _, err = elevated.updateEntry(ver, entry.Index, Entry{Type: NONEXISTENT}); err != nil {
 		return err
 	}
 	// TODO: check failure modes here

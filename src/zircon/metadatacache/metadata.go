@@ -43,7 +43,7 @@ func (mc *metadatacache) ReadEntry(chunk apis.ChunkNum) (apis.MetadataEntry, api
 
 	found := getBitsetInData(data, ChunkToEntryNumber(chunk))
 	if !found {
-		return apis.MetadataEntry{}, apis.NoRedirect, errors.New("entry doesn't exist to be able to be read")
+		return apis.MetadataEntry{}, apis.NoRedirect, fmt.Errorf("entry doesn't exist to be able to be read: %d", chunk)
 	}
 
 	entry, err := deserializeEntry(data[offset : offset+apis.EntrySize])

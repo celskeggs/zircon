@@ -11,6 +11,9 @@ fusermount -u zircon1 || true
 mkdir -p zircon0 zircon1
 
 ./etcd &
+
+sleep 2
+
 ./main cs0.yaml chunkserver &
 ./main cs1.yaml chunkserver &
 ./main mdc.yaml metadata-cache &
