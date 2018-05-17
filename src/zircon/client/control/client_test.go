@@ -331,7 +331,7 @@ func TestParallelClients(t *testing.T) {
 	defer teardown()
 
 	complete := make(chan int)
-	count := 8
+	count := 10
 
 	finishAt := time.Now().Add(time.Second * 5)
 	for i := 0; i < count; i++ {
@@ -394,10 +394,10 @@ func TestParallelClients(t *testing.T) {
 	ops := 0
 	for i := 0; i < count; i++ {
 		opsSingle := <-complete
-		assert.True(t, opsSingle >= 10, "not enough requests processed: %d/10", opsSingle)
+		assert.True(t, opsSingle >= 15, "not enough requests processed: %d/15", opsSingle)
 		ops += opsSingle
 	}
-	assert.True(t, ops >= 100, "not enough requests processed: %d/100", ops)
+	assert.True(t, ops >= 200, "not enough requests processed: %d/200", ops)
 
 	log.Printf("results of conflicting test: %d final\n", ops)
 }
