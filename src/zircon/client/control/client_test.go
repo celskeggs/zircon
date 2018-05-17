@@ -161,7 +161,66 @@ func TestMaxSizeChecking(t *testing.T) {
 }
 
 func TestReadRate(t *testing.T) {
-	// TODO
+	cache, _, fe, teardown := PrepareLocalCluster(t)
+	defer teardown()
+
+	var chunk apis.ChunkNum
+	var xver apis.Version
+
+	func() {
+		setupClient, err := ConstructClient(fe, cache)
+		require.NoError(t, err)
+		defer setupClient.Close()
+		chunk, err = setupClient.New()
+		assert.NoError(t, err)
+		xver, err = setupClient.Write(chunk, 0, apis.AnyVersion, []byte("hello world"))
+		assert.NoError(t, err)
+	}()
+
+	complete := make(chan int)
+	count := 10
+
+	finishAt := time.Now().Add(time.Second * 5)
+	for i := 0; i < count; i++ {
+		go func(clientId int) {
+			subcount := 0
+			ok := false
+			defer func() {
+				if ok {
+					complete <- subcount
+				} else {
+					complete <- -1
+				}
+			}()
+
+			client, err := ConstructClient(fe, cache)
+			assert.NoError(t, err)
+			defer client.Close()
+
+			for time.Now().Before(finishAt) {
+				data, ver, err := client.Read(chunk, 0, 128)
+				assert.NoError(t, err)
+				assert.Equal(t, xver, ver)
+				assert.Equal(t, "hello world", string(util.StripTrailingZeroes(data)))
+
+				subcount++
+			}
+
+			ok = true
+		}(i)
+	}
+
+	finalCount := 0
+	for i := 0; i < count; i++ {
+		subtotal := <-complete
+		assert.True(t, subtotal >= 700, "not enough requests processed: %d/700", subtotal)
+		assert.NotEqual(t, 0, subtotal)
+		finalCount += subtotal
+	}
+	// should be able to process at least four contended requests per second on average
+	assert.True(t, finalCount >= 8000, "not enough requests processed: %d/8000", finalCount)
+
+	log.Printf("results of read test: %d final\n", finalCount)
 }
 
 // Tests the ability for multiple clients to safely clobber each others' changes to a shared block of data.
@@ -250,7 +309,7 @@ func TestConflictingClients(t *testing.T) {
 	// should be able to process at least four contended requests per second on average
 	assert.True(t, finalCount >= 15, "not enough requests processed: %d/15", finalCount)
 
-	log.Printf("results of conflicting test: %d final\n", finalCount) // 28 baseline
+	log.Printf("results of conflicting test: %d final\n", finalCount)
 
 	checkSum := func() int {
 		teardownClient, err := ConstructClient(fe, cache)
@@ -340,7 +399,7 @@ func TestParallelClients(t *testing.T) {
 	}
 	assert.True(t, ops >= 100, "not enough requests processed: %d/100", ops)
 
-	log.Printf("results of conflicting test: %d final\n", ops) // 28 baseline
+	log.Printf("results of conflicting test: %d final\n", ops)
 }
 
 // Tests the ability for deleted chunks to be fully cleaned up
